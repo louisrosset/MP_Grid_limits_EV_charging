@@ -1,0 +1,167 @@
+---
+title: "05_access_county_all"
+output: html_document
+---
+
+This notebook calculates and analyses household grid access for all counties.
+
+```{r}
+library(tidyverse)
+library(tictoc)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(tidytext)
+library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
+library(readxl)
+library(colorspace)
+library(cowplot)
+```
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/Grid_limits_EV_charging/04_allocation/IOUdata')
+SCEtypes = read.csv("SCE/circuitfiles/SCE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+SCE_ICAaccess = read.csv("SCE/circuitfiles/SCE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(SCEtypes$x))
+
+PGEtypes = read.csv("PGE/circuitfiles/PGE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+PGE_ICAaccess = read.csv("PGE/circuitfiles/PGE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(PGEtypes$x))
+
+at <- c("1", "1.5", "2.0", "3.0", "4.0", "4.5", "5.0", "6.0", "7.0", "8.0", "9.0", "10.")
+```
+
+```{r}
+labsIOU <- function(x) ifelse(x == "PGE", "PG&E", "SCE")
+labsDER <- function(x) ifelse(x == "ICL", "Load", NA)
+```
+
+--------------------------------------------------------------------------------------------
+
+GRID LIMITS BY COUNTY - OVERALL 
+
+--------------------------------------------------------------------------------------------
+
+ACCESS
+We calculate the number of households with access based on grid limits.
+
+```{r}
+SCE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
+PGE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
+
+for (t in 1:length(at)) { 
+  name <- paste0("hhwacc_",at[t],"_ICL_pct") 
+  
+  SCE_ICAaccess[[name]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, SCE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))
+  SCE_ICAaccess[[paste0("hhwacc_",at[t],"_ICL")]] <- SCE_ICAaccess[[name]]*SCE_ICAaccess$tothh_Cpoly
+  
+  PGE_ICAaccess[[name]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, PGE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))
+  PGE_ICAaccess[[paste0("hhwacc_",at[t],"_ICL")]] <- PGE_ICAaccess[[name]]*PGE_ICAaccess$tothh_Cpoly
+}
+```
+
+
+```{r} 
+###Computing number of households with access per county
+IOU_ICAaccess_grid_cty <- 
+  rbind(select(PGE_ICAaccess, IOU, tothh_Cpoly, county, intersect(starts_with("hhwacc_"), ends_with("_pct"))),
+        select(SCE_ICAaccess, IOU, tothh_Cpoly, county, intersect(starts_with("hhwacc_"), ends_with("_pct")))) %>%
+  melt(id=c("IOU", "tothh_Cpoly", "county")) %>%
+  mutate(hhwacc_Cpoly = value*tothh_Cpoly) %>%    # households per Cpoly, not percent
+  group_by(IOU, county, variable) %>%
+  summarise(avgacc_cty_pct = mean(value, na.rm=TRUE), # avg percent access in county
+            tothh_cty = sum(tothh_Cpoly, na.rm=TRUE), # total number of households in county
+            hhwacc_cty_pct = sum(hhwacc_Cpoly, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE)) %>%
+  mutate(variable = as.character(variable),
+         threshold = sapply(strsplit(variable, "_"), function(x) x[2]),
+         threshold = factor(ifelse(threshold=="0",">0",threshold), levels=c(">0",at)),
+         DER = factor(sapply(strsplit(variable, "_"), function(x) x[3]), levels=c("ICL")),
+         avgacc_cty_pct = as.numeric(avgacc_cty_pct))
+```
+
+```{r}
+###Cleaning data to exclude counties with too few households (we consider counties with at least 100 households)
+hhexcl_by_county <- IOU_ICAaccess_grid_cty %>%
+    distinct(county, IOU, .keep_all = TRUE) %>%
+    filter((county == "Alpine" & IOU == "SCE") |
+           (county == "Inyo" & IOU == "PGE") |
+           (county == "Mariposa" & IOU == "SCE") |
+           (county == "Mono" & IOU == "PGE") |
+           (county == "Tuolumne" & IOU == "SCE") |
+           (county == "Ventura" & IOU == "PGE") |
+           (county == "Imperial") |
+           (county == "Lassen") |
+           (county == "Madera" & IOU == "SCE") |
+           (county == "San Diego") |
+           (county == "Siskiyou") |
+           (county == "Trinity")) %>%
+    group_by(county, IOU) %>%
+    summarise(hhexcl = sum(tothh_cty, na.rm = TRUE))
+
+cat("In total,", round(sum(hhexcl_by_county$hhexcl, na.rm = TRUE), 1),"households are not taken into account by excluding some unrepresentative combinations of counties and IOUs.")
+
+IOU_ICAaccess_grid_cty <- IOU_ICAaccess_grid_cty %>%
+    filter(!(county == "Alpine"),
+           !(county == "Fresno" & IOU == "SCE"),
+           !(county == "Inyo" & IOU == "PGE"),
+           !(county == "Mariposa" & IOU == "SCE"),
+           !(county == "Mono" & IOU == "PGE"),
+           !(county == "Tuolumne" & IOU == "SCE"),
+           !(county == "Ventura" & IOU == "PGE"),
+           !(county == "Imperial"),
+           !(county == "Lassen"),
+           !(county == "Madera"),
+           !(county == "San Diego"),
+           !(county == "Siskiyou"),
+           !(county == "Trinity"))
+```
+
+```{r}
+#Plotting acess results for 1.5 and 7.0 kW threshold
+plot <- IOU_ICAaccess_grid_cty  %>%
+  filter(threshold %in% c("1.5", "7.0"))
+
+plot <- dcast(plot, IOU + county + tothh_cty ~ threshold, 
+                   value.var = "hhwacc_cty_pct") %>%
+  group_by(IOU, county) %>%
+  rename("Access_1.5" = '1.5', "Access_7.0" = '7.0') %>%
+  arrange(IOU, Access_1.5) %>%
+  ungroup()
+
+plot <- plot %>%
+  distinct(IOU, county, .keep_all = TRUE)
+
+# Setting the levels of 'county' factor based on the order in 'plot'
+plot$county <- factor(plot$county, levels = unique(plot$county))
+
+plot$household_category <- cut(plot$tothh_cty,
+                               breaks = c(-Inf, 10000, 100000, 1000000, Inf),
+                               labels = c("<10", "10-100", "100-1'000", ">1'000"),
+                               right = FALSE)
+
+IOU_access_county_plot <- ggplot(plot) +
+  geom_segment(aes(x = county, xend = county,
+                   y = Access_1.5, yend = Access_7.0,
+                   color = household_category), size = 1) +
+  geom_crossbar(aes(x = county, y = Access_1.5, ymin = Access_1.5, ymax = Access_1.5),
+                width = 0.6, color = "black", size = 0.3) +
+  geom_crossbar(aes(x = county, y = Access_7.0, ymin = Access_7.0, ymax = Access_7.0),
+                width = 0.6, color = "black", size = 0.4) +
+  geom_col(aes(x = county, y = Access_7.0, fill = household_category), width = 0.6)  +
+  facet_grid(~ IOU, scales = "free_x", space = "free_x") +
+  labs(
+    x = "County",
+    y = "Proportion of households with access",
+    color=expression("Households x10"^"3"),
+    fill=expression("Households x10"^"3")
+  ) + theme_light() +
+  theme(axis.text.x = element_text(size = 9, angle = 45, hjust = 1),
+        legend.margin=margin(), legend.text=element_text(size=10)) +
+  scale_y_continuous(labels = scales::percent_format(scale = 100)) +
+  scale_color_discrete_sequential(palette="Viridis", nmax=4, order=4:1) +
+  scale_fill_discrete_sequential(palette="Viridis", nmax=4, order=4:1) +
+  guides(shape=guide_legend(nrow=4,title.position="top"))
+
+ggsave("figures/access/IOU_access_county.png", IOU_access_county_plot,  width = 15.5, height = 6.5, units = "in")
+
+print(IOU_access_county_plot)
+```
+

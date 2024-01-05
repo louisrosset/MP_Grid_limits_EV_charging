@@ -1,0 +1,343 @@
+---
+title: "05_access_own"
+author: "Louis Rosset"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(gridExtra)
+```
+
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata/SCE')
+
+SCEtypes <- read.csv("circuitfiles/SCE_ICAalldemoallocclasses.csv", header = TRUE, na.strings = "?")
+SCE_ICAaccess <- read.csv("circuitfiles/SCE_ICAalldemoalloc.csv", header = TRUE, na.strings = "?", colClasses = as.character(SCEtypes$x))
+
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata/PGE')
+
+PGEtypes <- read.csv("circuitfiles/PGE_ICAalldemoallocclasses.csv", header = TRUE, na.strings = "?")
+PGE_ICAaccess <- read.csv("circuitfiles/PGE_ICAalldemoalloc.csv", header = TRUE, na.strings = "?", colClasses = as.character(PGEtypes$x))
+```
+
+
+```{r}
+# Create a vector of capacity thresholds
+capacity_thresholds <- c(0, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10)
+
+# Initialize an empty vector to store proportions for PGE and SCE
+proportions_pge <- numeric(length(capacity_thresholds))
+proportions_sce <- numeric(length(capacity_thresholds))
+
+# Calculate the proportion of households with access for each threshold for PGE
+for (i in 1:length(capacity_thresholds)) {
+  threshold <- capacity_thresholds[i]
+  households_with_access <- sum(PGE_ICAaccess$tothh_Cpoly[PGE_ICAaccess$ICL_kWphh > threshold], na.rm = TRUE)
+  proportions_pge[i] <- households_with_access / sum(PGE_ICAaccess$tothh_Cpoly, na.rm = TRUE) * 100
+}
+
+# Calculate the proportion of households with access for each threshold for SCE
+for (i in 1:length(capacity_thresholds)) {
+  threshold <- capacity_thresholds[i]
+  households_with_access <- sum(SCE_ICAaccess$tothh_Cpoly[SCE_ICAaccess$ICL_kWphh > threshold], na.rm = TRUE)
+  proportions_sce[i] <- households_with_access / sum(SCE_ICAaccess$tothh_Cpoly, na.rm = TRUE) * 100
+}
+
+# Create a data frame for the results for PGE
+access_summary_pge <- data.frame(Capacity_Threshold = capacity_thresholds, Proportion = proportions_pge)
+
+# Create a data frame for the results for SCE
+access_summary_sce <- data.frame(Capacity_Threshold = capacity_thresholds, Proportion = proportions_sce)
+
+# Create the plot for PGE
+plot_pge <- ggplot(access_summary_pge, aes(x = Capacity_Threshold, y = Proportion)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(title = "PGE",
+       x = "Capacity Threshold (kW)",
+       y = "Proportion of Households with Access (%)") +
+  scale_x_continuous(breaks = capacity_thresholds, 
+                     labels = c(">0", "1", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), 
+                     limits = c(0, 100), 
+                     breaks = c(0, 20, 40, 60, 80, 100))
+
+# Create the plot for SCE
+plot_sce <- ggplot(access_summary_sce, aes(x = Capacity_Threshold, y = Proportion)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(title = "SCE",
+       x = "Capacity Threshold (kW)",
+       y = "Proportion of Households with Access (%)") +
+  scale_x_continuous(breaks = capacity_thresholds, 
+                     labels = c(">0", "1", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), 
+                     limits = c(0, 100), 
+                     breaks = c(0, 20, 40, 60, 80, 100))
+
+# Create a single figure with plots for PGE and SCE side by side
+combined_plot <- grid.arrange(plot_pge, plot_sce, ncol = 2)
+
+# Save the combined plot as an image file (e.g., PNG) with appropriate dimensions
+# Replace 'plot_output.png' with your desired file name and format
+ggsave("figures/access/plot_IOU_access.png", combined_plot, width = 12, height = 6)
+
+# Display the saved plot using your preferred image viewer
+#shell.exec("plot_IOU_access.png")
+```
+
+
+```{r}
+# Capacity threshold 
+specific_thresholds <- c(0, 1.5, 4.5, 10)
+
+# Display the households access in PG&E territory to specific hosting capacity threshold
+table_data_SCE <- access_summary_sce %>%
+  filter(Capacity_Threshold %in% specific_thresholds)
+table_data_SCE
+
+# Display the households access in PG&E territory to specific hosting capacity threshold
+table_data_PGE <- access_summary_pge %>%
+  filter(Capacity_Threshold %in% specific_thresholds)
+table_data_PGE
+```
+
+```{r}
+# Create race diversity intervals
+PGE_ICAaccess$race_diversity_interval <- cut(PGE_ICAaccess$racediversity * 100, 
+                                             breaks = c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+                                             labels = c("[0%; 10%]", "[10%; 20%]", "[20%; 30%]", "[30%; 40%]", "[40%; 50%]", "[50%; 60%]", "[60%; 70%]", "[70%; 80%]", "[80%; 90%]", "[90%; 100%]"))
+
+# Calculate median and 50% confidence intervals for hosting capacities
+capacity_summary <- PGE_ICAaccess %>%
+  group_by(race_diversity_interval) %>%
+  summarize(
+    median_capacity = median(ICL_kWphh, na.rm = TRUE),
+    lower_ci = quantile(ICL_kWphh, 0.25, na.rm = TRUE),  # 25th percentile for lower bound
+    upper_ci = quantile(ICL_kWphh, 0.75, na.rm = TRUE)   # 75th percentile for upper bound
+  )
+
+# Create the plot
+ggplot(data = capacity_summary, aes(x = race_diversity_interval, y = median_capacity)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci), width = 0.2) +
+  labs(x = "Race Diversity (%)", y = "Median Hosting Capacity (kW per household)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r}
+# Create bins for race diversity values (adjust the number of bins as needed)
+num_bins <- 10
+bin_width <- 1/num_bins
+PGE_ICAaccess$bin <- cut(PGE_ICAaccess$racediversity, breaks = seq(0, 1, by = bin_width))
+
+# Calculate median per-household hosting capacity for each bin
+median_capacity <- aggregate(ICL_kWphh ~ bin, data = PGE_ICAaccess, FUN = median)
+
+# Calculate the total number of households represented by each bin value
+households_per_bin <- PGE_ICAaccess %>%
+  group_by(bin) %>%
+  summarize(n = sum(tothh))  # Replace 'n' with the actual variable representing households
+
+# Create the plot with LOESS curves weighted by the total number of households
+# Create a ggplot object
+plot <- ggplot(data = median_capacity, aes(x = bin, y = ICL_kWphh)) +
+geom_point() +  # Scatterplot points
+geom_smooth(method = "loess", se = FALSE, size = 1) +  # LOESS curve without confidence intervals
+labs(x = "Race Diversity", y = "Median Hosting Capacity per Household (kW)") +
+theme_minimal()
+print(plot)
+```
+
+--------------------------------
+SCE
+--------------------------------
+
+```{r}
+# Function to remove outliers
+remove_outliers <- function(data, column_name) {
+  Q1 <- quantile(data[[column_name]], 0.25, na.rm = TRUE)
+  Q3 <- quantile(data[[column_name]], 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+  data <- data[data[[column_name]] > (Q1 - 1.5 * IQR) & data[[column_name]] < (Q3 + 1.5 * IQR), ]
+  return(data)
+}
+
+data_SCE <- remove_outliers(SCE_ICAaccess, "ICL_kWphh")
+
+# SCE Creating a scatter plot with a trend line for all unitsavg
+SCE_hhaccess_v1 <- ggplot(data_SCE, aes(x = unitsavg, y = ICL_kWphh)) +
+  geom_point(aes(color = ICL_kWphh), size = 1) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(
+    title = "SCE",
+    x = "Average number of units",
+    y = "Hosting capacity for load per household (kW)",
+    color = "kW/hh"
+  ) +
+  theme_minimal()
+
+# Displaying the plots side by side
+print(SCE_hhaccess_v1)
+```
+
+--------------------------------
+PGE - hhaccess - version 1
+--------------------------------
+```{r}
+# Function to remove outliers
+remove_outliers <- function(data, column_name) {
+  Q1 <- quantile(data[[column_name]], 0.25, na.rm = TRUE)
+  Q3 <- quantile(data[[column_name]], 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+  data <- data[data[[column_name]] > (Q1 - 1.5 * IQR) & data[[column_name]] < (Q3 + 1.5 * IQR), ]
+  return(data)
+}
+
+data_PGE <- remove_outliers(PGE_ICAaccess, "ICL_kWphh")
+
+# PGE Creating a scatter plot with a trend line for all unitsavg
+PGE_hhaccess_v1 <- ggplot(data_PGE, aes(x = unitsavg, y = ICL_kWphh)) +
+  geom_point(aes(color = ICL_kWphh), size = 1) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(
+    title = "PG&E",
+    x = "Average number of units",
+    y = "Hosting capacity for load per household (kW)",
+    color = "kW/hh"
+  ) +
+  theme_minimal()
+
+# Displaying the plots side by side
+print(PGE_hhaccess_v1)
+```
+```{r}
+# Function to calculate proportions
+calculate_proportions <- function(data, thresholds) {
+  sapply(thresholds, function(th) {
+    sum(data$tothh_Cpoly[data$ICL_kWphh > th], na.rm = TRUE) / sum(data$tothh_Cpoly, na.rm = TRUE) * 100
+  })
+}
+```
+
+--------------------------------
+SCE - hhaccess - version 2
+--------------------------------
+
+```{r}
+
+# Define the ranges and categories
+ranges <- list(c(0, 1), c(1, 2), c(2, 3), c(3, 4.5), c(4.5, 9.5), c(9.5, Inf))
+categories <- c("[0-1]", "[1-2]", "[2-3]", "[3-4.5]", "[4.5-9.5]", "[9.5+]")
+
+# Thresholds
+thresholds <- c(0, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10)
+
+# Applying the function to each range
+plot_data <- do.call(rbind, lapply(seq_along(ranges), function(i) {
+  data_filtered <- SCE_ICAaccess %>% filter(unitsavg >= ranges[[i]][1] & unitsavg < ranges[[i]][2])
+  proportions <- calculate_proportions(data_filtered, thresholds)
+  
+  data.frame(
+    Threshold = thresholds,
+    Proportion = proportions,
+    Category = categories[i]
+  )
+}))
+
+# Creating a line plot
+SCE_hhaccess_v2 <- ggplot(plot_data, aes(x = Threshold, y = Proportion, color = Category, group = Category)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c(
+    "[0-1]" = "steelblue1",
+    "[1-2]" = "steelblue2",
+    "[2-3]" = "steelblue3",
+    "[3-4.5]" = "steelblue4",
+    "[4.5-9.5]" = "midnightblue",
+    "[9.5+]" = "black"
+  )) +
+  scale_x_continuous(breaks = c(0, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10), 
+                     labels = c(">0", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), 
+                     limits = c(0, 100), 
+                     breaks = c(0, 20, 40, 60, 80, 100)) +
+  labs(
+    title = "SCE",
+    x = "Access threshold",
+    y = "Proportion of households with access",
+    color = "Number of units"
+  ) +
+  theme_minimal()
+
+# Displaying the plot
+print(SCE_hhaccess_v2)
+```
+
+
+--------------------------------
+#PGE - hhaccess - version 2
+--------------------------------
+
+```{r}
+# Define the ranges and categories
+ranges <- list(c(0, 1), c(1, 2), c(2, 3), c(3, 4.5), c(4.5, 9.5), c(9.5, Inf))
+categories <- c("[0-1]", "[1-2]", "[2-3]", "[3-4.5]", "[4.5-9.5]", "[9.5+]")
+
+# Thresholds
+thresholds <- c(0, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10)
+
+# Applying the function to each range
+plot_data <- do.call(rbind, lapply(seq_along(ranges), function(i) {
+  data_filtered <- PGE_ICAaccess %>% filter(unitsavg >= ranges[[i]][1] & unitsavg < ranges[[i]][2])
+  proportions <- calculate_proportions(data_filtered, thresholds)
+  
+  data.frame(
+    Threshold = thresholds,
+    Proportion = proportions,
+    Category = categories[i]
+  )
+}))
+
+# Creating a line plot
+PGE_hhaccess_v2 <- ggplot(plot_data, aes(x = Threshold, y = Proportion, color = Category, group = Category)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c(
+    "[0-1]" = "steelblue1",
+    "[1-2]" = "steelblue2",
+    "[2-3]" = "steelblue3",
+    "[3-4.5]" = "steelblue4",
+    "[4.5-9.5]" = "midnightblue",
+    "[9.5+]" = "black"
+  )) +
+  scale_x_continuous(breaks = c(0, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10), 
+                     labels = c(">0", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), 
+                     limits = c(0, 100), 
+                     breaks = c(0, 20, 40, 60, 80, 100)) +
+  labs(
+    title = "PGE",
+    x = "Access threshold",
+    y = "Proportion of households with access",
+    color = "Number of units"
+  ) +
+  theme_minimal()
+
+# Displaying the plot
+print(PGE_hhaccess_v2)
+```
+
+```{r}
+combined_plot_v2 <- grid.arrange(PGE_hhaccess_v2, SCE_hhaccess_v2, ncol = 2,
+             bottom = "Household access considering the number of units within a circuit polygon")
+
+ggsave("figures/access/plot_IOU_access_by_units.png", combined_plot_v2, width = 12, height = 6)
+```

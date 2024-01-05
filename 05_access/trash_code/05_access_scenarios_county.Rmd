@@ -1,0 +1,521 @@
+---
+title: "05_access_scenarios_county"
+output: html_document
+---
+
+This notebook calculates grid access for households in PG&E and SCE service territories.
+
+VERSION N°3 - Scenario calculation at County level
+
+```{r}
+library(tidyverse)
+library(tictoc)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(tidytext)
+library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
+library(readxl)
+library(colorspace)
+library(cowplot)
+library(gridExtra)
+
+get_legend<-function(myggplot){
+  tmp <- ggplot_gtable(ggplot_build(myggplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+```
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata')
+SCEtypes = read.csv("SCE/circuitfiles/SCE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+SCE_ICAaccess = read.csv("SCE/circuitfiles/SCE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(SCEtypes$x))
+
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata')
+PGEtypes = read.csv("PGE/circuitfiles/PGE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+PGE_ICAaccess = read.csv("PGE/circuitfiles/PGE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(PGEtypes$x))
+
+at <- c("1", "1.5", "2.0", "3.0", "4.0", "4.5", "5.0", "6.0", "7.0", "8.0", "9.0", "10.")
+
+###EXTRA FEATURES FOR HOUSING###
+SCEhousingtypes <- read.csv("SCE/circuitfiles/SCE_ICAalldemo_housing_classes.csv", header = TRUE, na.strings = "?")
+SCE_ICA_housing <- read.csv("SCE/circuitfiles/SCE_ICAalldemoalloc_housing.csv", header = TRUE, na.strings = "?", colClasses = as.character(SCEhousingtypes$x))
+
+PGEhousingtypes <- read.csv("PGE/circuitfiles/PGE_ICAalldemo_housing_classes.csv", header = TRUE, na.strings = "?")
+PGE_ICA_housing <- read.csv("PGE/circuitfiles/PGE_ICAalldemoalloc_housing.csv", header = TRUE, na.strings = "?", colClasses = as.character(PGEhousingtypes$x))
+
+#Correcting some duplicates problem
+PGE_ICAaccess <- PGE_ICAaccess[!duplicated(PGE_ICAaccess[, c("GEOID", "CircuitName")]), ]
+PGE_ICA_housing <- PGE_ICA_housing[!duplicated(PGE_ICA_housing[, c("GEOID", "CircuitName")]), ]
+
+SCE_ICAaccess <- merge(SCE_ICAaccess, 
+                       SCE_ICA_housing[, c("GEOID", "CircuitName", "MUD_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct")], 
+                       by = c("GEOID", "CircuitName"))
+
+SCE_ICAaccess <- merge(SCE_ICAaccess, SCE_ICA_housing[, c("GEOID", "CircuitName", "tothh_Cpoly", "tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")], by = c("GEOID", "CircuitName", "tothh_Cpoly"))
+
+PGE_ICAaccess <- merge(PGE_ICAaccess, 
+                       PGE_ICA_housing[, c("GEOID", "CircuitName", "MUD_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct")], 
+                       by = c("GEOID", "CircuitName"))
+
+PGE_ICAaccess <- merge(PGE_ICAaccess, PGE_ICA_housing[, c("GEOID", "CircuitName", "tothh_Cpoly", "tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")], by = c("GEOID", "CircuitName", "tothh_Cpoly"))
+
+rm(PGE_ICA_housing, SCE_ICA_housing, PGEhousingtypes, SCEhousingtypes, PGEtypes, SCEtypes)
+### ------------------------###
+```
+
+Importing vehicle's ownership data
+```{r}
+# Estimated average number of vehicles per household in 2017-2021, at Census Block Group level (Source: ACS 5-years average - found on https://ucberkeley.policymap.com/)
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/Vehicles/')
+ACS_bg_vehicles_hh = read.csv("Average_number_of_vehicles_per_household.csv", header = TRUE, skip = 1, na.strings = "?")
+ACS_bg_vehicles_hh <- ACS_bg_vehicles_hh %>%
+  select(GEOID = GeoID_Name, avgveh_hh = avmv) %>%
+  mutate(GEOID = as.character(GEOID),
+         avgveh_hh = as.numeric(avgveh_hh))
+```
+
+```{r}
+labsIOU <- function(x) ifelse(x == "PGE", "PG&E", "SCE")
+labsDER <- function(x) ifelse(x == "ICL", "Load", NA)
+```
+
+--------------------------------------------------------------------------------------------
+
+GRID LIMITS
+
+--------------------------------------------------------------------------------------------
+
+```{r}
+plotops_bggrid = list(
+  theme_light(), facet_grid(IOU~DER, scales="free_x", space='free_x', labeller=labeller(IOU=labsIOU, DER=labsDER)),
+  geom_boxplot(aes(fill=threshold), alpha=1, width=0.9), scale_fill_discrete_sequential(palette="Mint", nmax=13, order=1:13), 
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), legend.position="bottom"), guides(fill=guide_legend(nrow=1)), 
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)), 
+  labs(x="", y="Portion of households with access, by block group", fill="Access threshold (kW)")
+)
+
+plotops_allgrid = list(theme_light(), facet_grid(IOU~DER, labeller=labeller(IOU=labsIOU)),
+  geom_line(), geom_point(size=2), 
+  theme(legend.position="bottom", legend.margin=margin(), legend.text=element_text(size=8), axis.text.x=element_text(size=7)),
+  guides(shape=guide_legend(nrow=4,title.position="top")),
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)),
+  scale_x_continuous(breaks=c(0,as.numeric(at)), labels=c(">0", "1", "1.5","2","3","4","4.5","5","6","7","8","9","10")),
+  scale_color_discrete_sequential(palette="Viridis", nmax=5, order=5:2),
+  labs(x="Access threshold (kW)", y="Portion of households with access", color="Limit type")
+)
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"), 
+  # theme( axis.title=element_blank()),
+  geom_line(aes(y=value, color=feature),linewidth=0.75), geom_point(aes(y=value, color=feature),size=1),
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)),
+  scale_x_continuous(breaks=c(0,as.numeric(at)), labels=c(">0", "1", "1.5","2","3","4","4.5","5","6","7","8","9","10")),
+  scale_color_discrete_sequential(palette="Viridis", nmax=8, order=8:1),
+  labs(x="Access threshold (kW)", y="Portion of vehicles with access", color="Household size"))
+```
+
+-----------------------------------
+----------------------------------- EXPERIMENTAL CALCULATIONS ------------------
+
+```{r}
+#Preparing data 
+LVL1_CHRG_PWR <- 1.5 #level 1 power
+LVL2_CHRG_PWR <- 7.0 #level 2 power
+NUM_VEH_CHRG <- 6.5   #from 6 to 7 vehicles per charging station, from Executive Orders B4818 and N7920.
+
+IOU_vehwacc <- rbind(select(PGE_ICAaccess, GEOID, county, IOU, tothh_Cpoly, tothh_SU_Cpoly, tothh_duplex_Cpoly, tothh_3to4_Cpoly, tothh_5to9_Cpoly, tothh_10to19_Cpoly, tothh_20to49_Cpoly, tothh_50plus_Cpoly, ICL_kWphh, ICL_max_hhWt_nadj),
+        select(SCE_ICAaccess, GEOID, county, IOU, tothh_Cpoly, tothh_SU_Cpoly, tothh_duplex_Cpoly, tothh_3to4_Cpoly, tothh_5to9_Cpoly, tothh_10to19_Cpoly, tothh_20to49_Cpoly, tothh_50plus_Cpoly, ICL_kWphh, ICL_max_hhWt_nadj)) %>%
+  mutate(ICL_max_hhWt_nadj = if_else(IOU == "SCE", ICL_max_hhWt_nadj * 1000, ICL_max_hhWt_nadj)) %>%
+  mutate(tothh_smallmulti_Cpoly = tothh_3to4_Cpoly + tothh_5to9_Cpoly + tothh_10to19_Cpoly) %>%
+  mutate(tothh_largemulti_Cpoly = tothh_20to49_Cpoly + tothh_50plus_Cpoly)
+
+IOU_vehwacc <- merge(IOU_vehwacc, ACS_bg_vehicles_hh[, c("GEOID", "avgveh_hh")], 
+                     by = "GEOID", all.x = TRUE) %>%
+  mutate(totveh_Cpoly = tothh_Cpoly*avgveh_hh) %>%
+  mutate(totveh_SU_Cpoly = tothh_SU_Cpoly*avgveh_hh) %>%
+  mutate(totveh_duplex_Cpoly = tothh_duplex_Cpoly*avgveh_hh) %>%
+  mutate(totveh_smallmulti_Cpoly = tothh_smallmulti_Cpoly*avgveh_hh) %>%
+  mutate(totveh_largemulti_Cpoly = tothh_largemulti_Cpoly*avgveh_hh) %>%
+  mutate(ICL_kWpveh = ICL_kWphh/avgveh_hh)
+```
+
+```{r}
+ #SCENARIO 1.1
+ #Individual charging
+ #All households should have access to his individual charging infrastructure, either level 1 (1.5kW) or level 2 (7kW).
+ IOU_vehwacc_sc11 <- IOU_vehwacc %>%
+ mutate(Sc11_veh_load = tothh_Cpoly*LVL1_CHRG_PWR)%>%
+  mutate(Sc11_veh_headroom = ICL_max_hhWt_nadj - Sc11_veh_load) %>%
+  mutate(Sc11_vehwacc = ifelse(Sc11_veh_headroom>=0, totveh_Cpoly, totveh_Cpoly*ICL_max_hhWt_nadj/Sc11_veh_load))%>%
+  mutate(Sc11_hhwacc = ifelse(Sc11_veh_headroom>=0, tothh_Cpoly, tothh_Cpoly*ICL_max_hhWt_nadj/Sc11_veh_load)) %>%
+  mutate(Sc11_hhnoacc150 = ifelse(Sc11_veh_headroom >=-150 & Sc11_veh_headroom<0, tothh_Cpoly*(1-ICL_max_hhWt_nadj/Sc11_veh_load), 0))%>%
+  mutate(Sc11_hhnoaccinf = ifelse(Sc11_veh_headroom < -150, tothh_Cpoly*(1-ICL_max_hhWt_nadj/Sc11_veh_load), 0))%>%
+  mutate(Sc11_vehwacc_pct = Sc11_vehwacc/totveh_Cpoly)%>%
+  mutate(Sc11_hhwacc_pct = Sc11_hhwacc/tothh_Cpoly)%>%
+  mutate(Sc11_hhnoacc150_pct = Sc11_hhnoacc150/tothh_Cpoly)%>%
+  mutate(Sc11_hhnoaccinf_pct = Sc11_hhnoaccinf/tothh_Cpoly)%>%
+  #for all type of housing
+  #vehicles with access
+  mutate(Sc11_vehwacc_SU = Sc11_vehwacc_pct*totveh_SU_Cpoly)%>%
+  mutate(Sc11_vehwacc_duplex = Sc11_vehwacc_pct*totveh_duplex_Cpoly)%>%
+  mutate(Sc11_vehwacc_small = Sc11_vehwacc_pct*totveh_smallmulti_Cpoly)%>%
+  mutate(Sc11_vehwacc_large = Sc11_vehwacc_pct*totveh_largemulti_Cpoly)%>%
+  #households with access
+  mutate(Sc11_hhwacc_SU = Sc11_hhwacc_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc11_hhwacc_duplex = Sc11_hhwacc_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc11_hhwacc_small = Sc11_hhwacc_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc11_hhwacc_large = Sc11_hhwacc_pct*tothh_largemulti_Cpoly)%>%
+  #households with no access - from -150kW to 0
+  mutate(Sc11_hhnoacc150_SU = Sc11_hhnoacc150_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc11_hhnoacc150_duplex = Sc11_hhnoacc150_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc11_hhnoacc150_small = Sc11_hhnoacc150_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc11_hhnoacc150_large = Sc11_hhnoacc150_pct*tothh_largemulti_Cpoly)%>%
+  #households with no access - more than -150kW
+  mutate(Sc11_hhnoaccinf_SU = Sc11_hhnoaccinf_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc11_hhnoaccinf_duplex = Sc11_hhnoaccinf_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc11_hhnoaccinf_small = Sc11_hhnoaccinf_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc11_hhnoaccinf_large = Sc11_hhnoaccinf_pct*tothh_largemulti_Cpoly)
+
+cat(" Scenario 1.1 - All households should have access to an individual level 1 (1.5 kW) charging facility.
+
+    All: We estimate that ",sum(IOU_vehwacc_sc11$Sc11_vehwacc, na.rm = TRUE)," vehicles and ",sum(IOU_vehwacc_sc11$Sc11_hhwacc, na.rm = TRUE)," households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc11$Sc11_vehwacc, na.rm = TRUE)/sum(IOU_vehwacc_sc11$totveh_Cpoly, na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc11$Sc11_hhwacc, na.rm = TRUE)/sum(IOU_vehwacc_sc11$tothh_Cpoly, na.rm = TRUE)*100), "% of all households in PG&E and SCE service territory.
+    
+    PG&E: We estimate that ", sum(IOU_vehwacc_sc11$Sc11_vehwacc[IOU_vehwacc_sc11$IOU == "PGE"], na.rm = TRUE), "vehicles and ", sum(IOU_vehwacc_sc11$Sc11_hhwacc[IOU_vehwacc_sc11$IOU == "PGE"], na.rm = TRUE), "households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc11$Sc11_vehwacc[IOU_vehwacc_sc11$IOU == "PGE"], na.rm = TRUE)/sum(IOU_vehwacc_sc11$totveh_Cpoly[IOU_vehwacc_sc11$IOU == "PGE"], na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc11$Sc11_hhwacc[IOU_vehwacc_sc11$IOU == "PGE"], na.rm = TRUE)/sum(IOU_vehwacc_sc11$tothh_Cpoly[IOU_vehwacc_sc11$IOU == "PGE"], na.rm = TRUE)*100), "% of all households in PG&E territory.
+
+    SCE: We estimate that ", sum(IOU_vehwacc_sc11$Sc11_vehwacc[IOU_vehwacc_sc11$IOU == "SCE"], na.rm = TRUE), "vehicles and ", sum(IOU_vehwacc_sc11$Sc11_hhwacc[IOU_vehwacc_sc11$IOU == "SCE"], na.rm = TRUE), "households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc11$Sc11_vehwacc[IOU_vehwacc_sc11$IOU == "SCE"], na.rm = TRUE)/sum(IOU_vehwacc_sc11$totveh_Cpoly[IOU_vehwacc_sc11$IOU == "SCE"], na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc11$Sc11_hhwacc[IOU_vehwacc_sc11$IOU == "SCE"], na.rm = TRUE)/sum(IOU_vehwacc_sc11$tothh_Cpoly[IOU_vehwacc_sc11$IOU == "SCE"], na.rm = TRUE)*100), "% of all households in SCE territory.")
+```
+
+```{r}
+ #SCENARIO 1.2
+ #Individual charging
+ #All households should have access to his individual charging infrastructure, either level 1 (1.5kW) or level 2 (7kW).
+ IOU_vehwacc_sc12 <- IOU_vehwacc %>%
+ mutate(Sc12_veh_load = tothh_Cpoly*LVL2_CHRG_PWR)%>%
+  mutate(Sc12_veh_headroom = ICL_max_hhWt_nadj - Sc12_veh_load) %>%
+  mutate(Sc12_vehwacc = ifelse(Sc12_veh_headroom>=0, totveh_Cpoly, totveh_Cpoly*ICL_max_hhWt_nadj/Sc12_veh_load))%>%
+  mutate(Sc12_hhwacc = ifelse(Sc12_veh_headroom>=0, tothh_Cpoly, tothh_Cpoly*ICL_max_hhWt_nadj/Sc12_veh_load)) %>%
+  mutate(Sc12_hhnoacc150 = ifelse(Sc12_veh_headroom >=-150 & Sc12_veh_headroom<0, tothh_Cpoly*(1-ICL_max_hhWt_nadj/Sc12_veh_load), 0))%>%
+  mutate(Sc12_hhnoaccinf = ifelse(Sc12_veh_headroom < -150, tothh_Cpoly*(1-ICL_max_hhWt_nadj/Sc12_veh_load), 0))%>%
+  mutate(Sc12_vehwacc_pct = Sc12_vehwacc/totveh_Cpoly)%>%
+  mutate(Sc12_hhwacc_pct = Sc12_hhwacc/tothh_Cpoly)%>%
+  mutate(Sc12_hhnoacc150_pct = Sc12_hhnoacc150/tothh_Cpoly)%>%
+  mutate(Sc12_hhnoaccinf_pct = Sc12_hhnoaccinf/tothh_Cpoly)%>%
+  #for all type of housing
+  #vehicles with access
+  mutate(Sc12_vehwacc_SU = Sc12_vehwacc_pct*totveh_SU_Cpoly)%>%
+  mutate(Sc12_vehwacc_duplex = Sc12_vehwacc_pct*totveh_duplex_Cpoly)%>%
+  mutate(Sc12_vehwacc_small = Sc12_vehwacc_pct*totveh_smallmulti_Cpoly)%>%
+  mutate(Sc12_vehwacc_large = Sc12_vehwacc_pct*totveh_largemulti_Cpoly)%>%
+  #households with access
+  mutate(Sc12_hhwacc_SU = Sc12_hhwacc_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc12_hhwacc_duplex = Sc12_hhwacc_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc12_hhwacc_small = Sc12_hhwacc_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc12_hhwacc_large = Sc12_hhwacc_pct*tothh_largemulti_Cpoly)%>%
+  #households with no access - from -150kW to 0
+  mutate(Sc12_hhnoacc150_SU = Sc12_hhnoacc150_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc12_hhnoacc150_duplex = Sc12_hhnoacc150_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc12_hhnoacc150_small = Sc12_hhnoacc150_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc12_hhnoacc150_large = Sc12_hhnoacc150_pct*tothh_largemulti_Cpoly)%>%
+  #households with no access - more than -150kW
+  mutate(Sc12_hhnoaccinf_SU = Sc12_hhnoaccinf_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc12_hhnoaccinf_duplex = Sc12_hhnoaccinf_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc12_hhnoaccinf_small = Sc12_hhnoaccinf_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc12_hhnoaccinf_large = Sc12_hhnoaccinf_pct*tothh_largemulti_Cpoly)
+
+cat(" Scenario 1.2 - All households should have access to an individual level 2 (7 kW) charging facility.
+
+    All: We estimate that ",sum(IOU_vehwacc_sc12$Sc12_vehwacc, na.rm = TRUE)," vehicles and ",sum(IOU_vehwacc_sc12$Sc12_hhwacc, na.rm = TRUE)," households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc12$Sc12_vehwacc, na.rm = TRUE)/sum(IOU_vehwacc_sc12$totveh_Cpoly, na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc12$Sc12_hhwacc, na.rm = TRUE)/sum(IOU_vehwacc_sc12$tothh_Cpoly, na.rm = TRUE)*100), "% of all households in PG&E and SCE service territory.
+    
+    PG&E: We estimate that ", sum(IOU_vehwacc_sc12$Sc12_vehwacc[IOU_vehwacc_sc12$IOU == "PGE"], na.rm = TRUE), "vehicles and ", sum(IOU_vehwacc_sc12$Sc12_hhwacc[IOU_vehwacc_sc12$IOU == "PGE"], na.rm = TRUE), "households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc12$Sc12_vehwacc[IOU_vehwacc_sc12$IOU == "PGE"], na.rm = TRUE)/sum(IOU_vehwacc_sc12$totveh_Cpoly[IOU_vehwacc_sc12$IOU == "PGE"], na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc12$Sc12_hhwacc[IOU_vehwacc_sc12$IOU == "PGE"], na.rm = TRUE)/sum(IOU_vehwacc_sc12$tothh_Cpoly[IOU_vehwacc_sc12$IOU == "PGE"], na.rm = TRUE)*100), "% of all households in PG&E territory.
+
+    SCE: We estimate that ", sum(IOU_vehwacc_sc12$Sc12_vehwacc[IOU_vehwacc_sc12$IOU == "SCE"], na.rm = TRUE), "vehicles and ", sum(IOU_vehwacc_sc12$Sc12_hhwacc[IOU_vehwacc_sc12$IOU == "SCE"], na.rm = TRUE), "households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc12$Sc12_vehwacc[IOU_vehwacc_sc12$IOU == "SCE"], na.rm = TRUE)/sum(IOU_vehwacc_sc12$totveh_Cpoly[IOU_vehwacc_sc12$IOU == "SCE"], na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc12$Sc12_hhwacc[IOU_vehwacc_sc12$IOU == "SCE"], na.rm = TRUE)/sum(IOU_vehwacc_sc12$tothh_Cpoly[IOU_vehwacc_sc12$IOU == "SCE"], na.rm = TRUE)*100), "% of all households in SCE territory.")
+```
+
+```{r}
+#SCENARIO 2
+#Shared charging only
+IOU_vehwacc_sc2 <- IOU_vehwacc %>%
+  mutate(Sc2_veh_load = totveh_Cpoly/NUM_VEH_CHRG*LVL2_CHRG_PWR)%>%
+  mutate(Sc2_veh_headroom = ICL_max_hhWt_nadj - Sc2_veh_load)%>%
+  mutate(Sc2_vehwacc = ifelse(Sc2_veh_headroom>=0, totveh_Cpoly, totveh_Cpoly*ICL_max_hhWt_nadj/Sc2_veh_load))%>%
+  mutate(Sc2_hhwacc = ifelse(Sc2_veh_headroom>=0, tothh_Cpoly, tothh_Cpoly*ICL_max_hhWt_nadj/Sc2_veh_load))%>%
+  mutate(Sc2_hhnoacc150 = ifelse(Sc2_veh_headroom >=-150 & Sc2_veh_headroom<0, tothh_Cpoly*(1-ICL_max_hhWt_nadj/Sc2_veh_load), 0))%>%
+  mutate(Sc2_hhnoaccinf = ifelse(Sc2_veh_headroom < -150, tothh_Cpoly*(1-ICL_max_hhWt_nadj/Sc2_veh_load), 0))%>%
+  mutate(Sc2_vehwacc_pct = Sc2_vehwacc/totveh_Cpoly)%>%
+  mutate(Sc2_hhwacc_pct = Sc2_hhwacc/tothh_Cpoly)%>%
+  mutate(Sc2_hhnoacc150_pct = Sc2_hhnoacc150/tothh_Cpoly)%>%
+  mutate(Sc2_hhnoaccinf_pct = Sc2_hhnoaccinf/tothh_Cpoly)%>%
+  #for all type of housing
+  #vehicles with access
+  mutate(Sc2_vehwacc_SU = Sc2_vehwacc_pct*totveh_SU_Cpoly)%>%
+  mutate(Sc2_vehwacc_duplex = Sc2_vehwacc_pct*totveh_duplex_Cpoly)%>%
+  mutate(Sc2_vehwacc_small = Sc2_vehwacc_pct*totveh_smallmulti_Cpoly)%>%
+  mutate(Sc2_vehwacc_large = Sc2_vehwacc_pct*totveh_largemulti_Cpoly)%>%
+  #households with access
+  mutate(Sc2_hhwacc_SU = Sc2_hhwacc_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc2_hhwacc_duplex = Sc2_hhwacc_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc2_hhwacc_small = Sc2_hhwacc_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc2_hhwacc_large = Sc2_hhwacc_pct*tothh_largemulti_Cpoly)%>%
+  #households with no access - from -150kW to 0
+  mutate(Sc2_hhnoacc150_SU = Sc2_hhnoacc150_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc2_hhnoacc150_duplex = Sc2_hhnoacc150_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc2_hhnoacc150_small = Sc2_hhnoacc150_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc2_hhnoacc150_large = Sc2_hhnoacc150_pct*tothh_largemulti_Cpoly)%>%
+  #households with no access - more than -150kW
+  mutate(Sc2_hhnoaccinf_SU = Sc2_hhnoaccinf_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc2_hhnoaccinf_duplex = Sc2_hhnoaccinf_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc2_hhnoaccinf_small = Sc2_hhnoaccinf_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc2_hhnoaccinf_large = Sc2_hhnoaccinf_pct*tothh_largemulti_Cpoly)
+
+cat(" Scenario 2 - All households should have access to level 2 (7.0 kW) charging facilities close to their homes. One charging infrastructure can support the load of 6.5 vehicles.
+
+    All: We estimate that ",sum(IOU_vehwacc_sc2$Sc2_vehwacc, na.rm = TRUE)," vehicles and ",sum(IOU_vehwacc_sc2$Sc2_hhwacc, na.rm = TRUE)," households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc2$Sc2_vehwacc, na.rm = TRUE)/sum(IOU_vehwacc_sc2$totveh_Cpoly, na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc2$Sc2_hhwacc, na.rm = TRUE)/sum(IOU_vehwacc_sc2$tothh_Cpoly, na.rm = TRUE)*100), "% of all households in PG&E and SCE service territory.
+    
+    PG&E: We estimate that ", sum(IOU_vehwacc_sc2$Sc2_vehwacc[IOU_vehwacc_sc2$IOU == "PGE"], na.rm = TRUE), "vehicles and ", sum(IOU_vehwacc_sc2$Sc2_hhwacc[IOU_vehwacc_sc2$IOU == "PGE"], na.rm = TRUE), "households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc2$Sc2_vehwacc[IOU_vehwacc_sc2$IOU == "PGE"], na.rm = TRUE)/sum(IOU_vehwacc_sc2$totveh_Cpoly[IOU_vehwacc_sc2$IOU == "PGE"], na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc2$Sc2_hhwacc[IOU_vehwacc_sc2$IOU == "PGE"], na.rm = TRUE)/sum(IOU_vehwacc_sc2$tothh_Cpoly[IOU_vehwacc_sc2$IOU == "PGE"], na.rm = TRUE)*100), "% of all households in PG&E territory.
+
+    SCE: We estimate that ", sum(IOU_vehwacc_sc2$Sc2_vehwacc[IOU_vehwacc_sc2$IOU == "SCE"], na.rm = TRUE), "vehicles and ", sum(IOU_vehwacc_sc2$Sc2_hhwacc[IOU_vehwacc_sc2$IOU == "SCE"], na.rm = TRUE), "households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc2$Sc2_vehwacc[IOU_vehwacc_sc2$IOU == "SCE"], na.rm = TRUE)/sum(IOU_vehwacc_sc2$totveh_Cpoly[IOU_vehwacc_sc2$IOU == "SCE"], na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc2$Sc2_hhwacc[IOU_vehwacc_sc2$IOU == "SCE"], na.rm = TRUE)/sum(IOU_vehwacc_sc2$tothh_Cpoly[IOU_vehwacc_sc2$IOU == "SCE"], na.rm = TRUE)*100), "% of all households in SCE territory.")
+```
+
+```{r}
+#SCENARIO 3
+#Mixed charging - per type of housing
+#SU --> 1.5kW charging station/hh
+#Duplex --> 1/2 * 7.0kW charging station/hh
+#smallmulti --> 6.5 veh/charging station
+#largemulti --> 6.5 veh/charging station
+
+IOU_vehwacc_sc3 <- IOU_vehwacc %>%
+  mutate(Sc3_veh_load = tothh_SU_Cpoly*LVL1_CHRG_PWR + tothh_duplex_Cpoly/2*LVL2_CHRG_PWR + (totveh_smallmulti_Cpoly+totveh_largemulti_Cpoly)/NUM_VEH_CHRG*LVL2_CHRG_PWR )%>%
+  mutate(Sc3_veh_headroom = ICL_max_hhWt_nadj - Sc3_veh_load) %>%
+  mutate(Sc3_vehwacc = ifelse(Sc3_veh_headroom>=0, totveh_Cpoly, totveh_Cpoly*ICL_max_hhWt_nadj/Sc3_veh_load))%>%
+  mutate(Sc3_hhwacc = ifelse(Sc3_veh_headroom>=0, tothh_Cpoly, tothh_Cpoly*ICL_max_hhWt_nadj/Sc3_veh_load)) %>%
+  mutate(Sc3_hhnoacc150 = ifelse(Sc3_veh_headroom >=-150 & Sc3_veh_headroom<0, tothh_Cpoly*(1-ICL_max_hhWt_nadj/Sc3_veh_load), 0))%>%
+  mutate(Sc3_hhnoaccinf = ifelse(Sc3_veh_headroom < -150, tothh_Cpoly*(1-ICL_max_hhWt_nadj/Sc3_veh_load), 0))%>%
+  mutate(Sc3_vehwacc_pct = Sc3_vehwacc/totveh_Cpoly)%>%
+  mutate(Sc3_hhwacc_pct = Sc3_hhwacc/tothh_Cpoly)%>%
+  mutate(Sc3_hhnoacc150_pct = Sc3_hhnoacc150/tothh_Cpoly)%>%
+  mutate(Sc3_hhnoaccinf_pct = Sc3_hhnoaccinf/tothh_Cpoly)%>%
+  #for all type of housing
+  #vehicles with access
+  mutate(Sc3_vehwacc_SU = Sc3_vehwacc_pct*totveh_SU_Cpoly)%>%
+  mutate(Sc3_vehwacc_duplex = Sc3_vehwacc_pct*totveh_duplex_Cpoly)%>%
+  mutate(Sc3_vehwacc_small = Sc3_vehwacc_pct*totveh_smallmulti_Cpoly)%>%
+  mutate(Sc3_vehwacc_large = Sc3_vehwacc_pct*totveh_largemulti_Cpoly)%>%
+  #households with access
+  mutate(Sc3_hhwacc_SU = Sc3_hhwacc_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc3_hhwacc_duplex = Sc3_hhwacc_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc3_hhwacc_small = Sc3_hhwacc_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc3_hhwacc_large = Sc3_hhwacc_pct*tothh_largemulti_Cpoly)%>%
+  #households with no access - from -150kW to 0
+  mutate(Sc3_hhnoacc150_SU = Sc3_hhnoacc150_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc3_hhnoacc150_duplex = Sc3_hhnoacc150_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc3_hhnoacc150_small = Sc3_hhnoacc150_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc3_hhnoacc150_large = Sc3_hhnoacc150_pct*tothh_largemulti_Cpoly)%>%
+  #households with no access - more than -150kW
+  mutate(Sc3_hhnoaccinf_SU = Sc3_hhnoaccinf_pct*tothh_SU_Cpoly)%>%
+  mutate(Sc3_hhnoaccinf_duplex = Sc3_hhnoaccinf_pct*tothh_duplex_Cpoly)%>%
+  mutate(Sc3_hhnoaccinf_small = Sc3_hhnoaccinf_pct*tothh_smallmulti_Cpoly)%>%
+  mutate(Sc3_hhnoaccinf_large = Sc3_hhnoaccinf_pct*tothh_largemulti_Cpoly)
+
+cat(" Scenario 3 - All households should have access to home charging. Single unit houses have access to level 1 charging (1.5 kW) and MUDs to level 2. The number of charging stations depends on the housing types (see above).
+    All: We estimate that ",sum(IOU_vehwacc_sc3$totveh_Cpoly[IOU_vehwacc_sc3$Sc3_veh_headroom >= 0], na.rm = TRUE)," vehicles and ",sum(IOU_vehwacc_sc3$tothh_Cpoly[IOU_vehwacc_sc3$Sc3_veh_headroom >= 0], na.rm = TRUE)," households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc3$totveh_Cpoly[IOU_vehwacc_sc3$Sc3_veh_headroom >= 0], na.rm = TRUE)/sum(IOU_vehwacc_sc3$totveh_Cpoly, na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc3$tothh_Cpoly[IOU_vehwacc_sc3$Sc3_veh_headroom >= 0], na.rm = TRUE)/sum(IOU_vehwacc_sc3$tothh_Cpoly, na.rm = TRUE)*100), "% of all households in PG&E and SCE service territory.
+
+    PG&E: We estimate that ", sum(IOU_vehwacc_sc3$Sc3_vehwacc[IOU_vehwacc_sc3$IOU == "PGE"], na.rm = TRUE), "vehicles and ", sum(IOU_vehwacc_sc3$Sc3_hhwacc[IOU_vehwacc_sc3$IOU == "PGE"], na.rm = TRUE), "households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc3$Sc3_vehwacc[IOU_vehwacc_sc3$IOU == "PGE"], na.rm = TRUE)/sum(IOU_vehwacc_sc3$totveh_Cpoly[IOU_vehwacc_sc3$IOU == "PGE"], na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc3$Sc3_hhwacc[IOU_vehwacc_sc3$IOU == "PGE"], na.rm = TRUE)/sum(IOU_vehwacc_sc3$tothh_Cpoly[IOU_vehwacc_sc3$IOU == "PGE"], na.rm = TRUE)*100), "% of all households in PG&E territory.
+
+    SCE: We estimate that ", sum(IOU_vehwacc_sc3$Sc3_vehwacc[IOU_vehwacc_sc3$IOU == "SCE"], na.rm = TRUE), "vehicles and ", sum(IOU_vehwacc_sc3$Sc3_hhwacc[IOU_vehwacc_sc3$IOU == "SCE"], na.rm = TRUE), "households have access to an adequate grid for charging.
+    It represents aprox. ", round(sum(IOU_vehwacc_sc3$Sc3_vehwacc[IOU_vehwacc_sc3$IOU == "SCE"], na.rm = TRUE)/sum(IOU_vehwacc_sc3$totveh_Cpoly[IOU_vehwacc_sc3$IOU == "SCE"], na.rm = TRUE)*100), "% of all vehicles and ", round(sum(IOU_vehwacc_sc3$Sc3_hhwacc[IOU_vehwacc_sc3$IOU == "SCE"], na.rm = TRUE)/sum(IOU_vehwacc_sc3$tothh_Cpoly[IOU_vehwacc_sc3$IOU == "SCE"], na.rm = TRUE)*100), "% of all households in SCE territory.")
+```
+
+```{r}
+#Comparison between Scenarios - GROUPED by COUNTY
+#Scenario 1.1
+df_sc11_hh <- select(IOU_vehwacc_sc11, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("Sc11_hhwacc"), starts_with("Sc11_hhnoacc")) %>%
+  group_by(IOU, county) %>%
+  summarise(
+            #Calculating total households
+            tothh = sum(tothh_Cpoly, na.rm=TRUE),
+            #Calculating percentage of households with access
+            Sc11_wacc_all_pct = sum(Sc11_hhwacc, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc11_wacc_SU_pct = sum(Sc11_hhwacc_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc11_wacc_duplex_pct = sum(Sc11_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc11_wacc_small_pct = sum(Sc11_hhwacc_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc11_wacc_large_pct = sum(Sc11_hhwacc_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE),
+            Sc11_noacc150_all_pct = sum(Sc11_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc11_noacc150_SU_pct = sum(Sc11_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc11_noacc150_duplex_pct = sum(Sc11_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc11_noacc150_small_pct = sum(Sc11_hhnoacc150_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc11_noacc150_large_pct = sum(Sc11_hhnoacc150_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE),
+            Sc11_noaccinf_all_pct = sum(Sc11_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc11_noaccinf_SU_pct = sum(Sc11_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc11_noaccinf_duplex_pct = sum(Sc11_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc11_noaccinf_small_pct = sum(Sc11_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc11_noaccinf_large_pct = sum(Sc11_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE))
+
+#Scenario 1.2
+df_sc12_hh <- select(IOU_vehwacc_sc12, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("Sc12_hhwacc"), starts_with("Sc12_hhnoacc")) %>%
+  group_by(IOU, county) %>%
+  summarise(
+            #Calculating total households
+            tothh = sum(tothh_Cpoly, na.rm=TRUE),
+            #Calculating percentage of households with access
+            Sc12_wacc_all_pct = sum(Sc12_hhwacc, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc12_wacc_SU_pct = sum(Sc12_hhwacc_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc12_wacc_duplex_pct = sum(Sc12_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc12_wacc_small_pct = sum(Sc12_hhwacc_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc12_wacc_large_pct = sum(Sc12_hhwacc_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE),
+            Sc12_noacc150_all_pct = sum(Sc12_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc12_noacc150_SU_pct = sum(Sc12_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc12_noacc150_duplex_pct = sum(Sc12_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc12_noacc150_small_pct = sum(Sc12_hhnoacc150_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc12_noacc150_large_pct = sum(Sc12_hhnoacc150_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE),
+            Sc12_noaccinf_all_pct = sum(Sc12_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc12_noaccinf_SU_pct = sum(Sc12_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc12_noaccinf_duplex_pct = sum(Sc12_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc12_noaccinf_small_pct = sum(Sc12_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc12_noaccinf_large_pct = sum(Sc12_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE))
+
+#Scenario 2
+df_sc2_hh <- select(IOU_vehwacc_sc2, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("Sc2_hhwacc"), starts_with("Sc2_hhnoacc")) %>%
+  group_by(IOU, county) %>%
+  summarise(
+            #Calculating total households
+            tothh = sum(tothh_Cpoly, na.rm=TRUE),
+            #Calculating percentage of households with access
+            Sc2_wacc_all_pct = sum(Sc2_hhwacc, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc2_wacc_SU_pct = sum(Sc2_hhwacc_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc2_wacc_duplex_pct = sum(Sc2_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc2_wacc_small_pct = sum(Sc2_hhwacc_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc2_wacc_large_pct = sum(Sc2_hhwacc_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE),
+            Sc2_noacc150_all_pct = sum(Sc2_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc2_noacc150_SU_pct = sum(Sc2_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc2_noacc150_duplex_pct = sum(Sc2_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc2_noacc150_small_pct = sum(Sc2_hhnoacc150_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc2_noacc150_large_pct = sum(Sc2_hhnoacc150_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE),
+            Sc2_noaccinf_all_pct = sum(Sc2_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc2_noaccinf_SU_pct = sum(Sc2_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc2_noaccinf_duplex_pct = sum(Sc2_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc2_noaccinf_small_pct = sum(Sc2_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc2_noaccinf_large_pct = sum(Sc2_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE))
+
+#Scenario 3
+df_sc3_hh <- select(IOU_vehwacc_sc3, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("Sc3_hhwacc"), starts_with("Sc3_hhnoacc")) %>%
+  group_by(IOU, county) %>%
+  summarise(
+            #Calculating total households
+            tothh = sum(tothh_Cpoly, na.rm=TRUE),
+            #Calculating percentage of households with access
+            Sc3_wacc_all_pct = sum(Sc3_hhwacc, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc3_wacc_SU_pct = sum(Sc3_hhwacc_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc3_wacc_duplex_pct = sum(Sc3_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc3_wacc_small_pct = sum(Sc3_hhwacc_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc3_wacc_large_pct = sum(Sc3_hhwacc_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE),
+            Sc3_noacc150_all_pct = sum(Sc3_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc3_noacc150_SU_pct = sum(Sc3_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc3_noacc150_duplex_pct = sum(Sc3_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc3_noacc150_small_pct = sum(Sc3_hhnoacc150_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc3_noacc150_large_pct = sum(Sc3_hhnoacc150_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE),
+            Sc3_noaccinf_all_pct = sum(Sc3_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            Sc3_noaccinf_SU_pct = sum(Sc3_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            Sc3_noaccinf_duplex_pct = sum(Sc3_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            Sc3_noaccinf_small_pct = sum(Sc3_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_smallmulti_Cpoly, na.rm=TRUE),
+            Sc3_noaccinf_large_pct = sum(Sc3_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_largemulti_Cpoly, na.rm=TRUE))
+
+transform_df <- function(df) {
+  df %>%
+    pivot_longer(
+      cols = -c("IOU", "county", "tothh"),
+      names_to = c("Scenario", "Load", "Housing", ".value"),
+      names_sep = "_",
+      values_to = "Value"
+    )
+}
+
+df_plot <- bind_rows(
+  transform_df(df_sc11_hh),
+  transform_df(df_sc12_hh),
+  transform_df(df_sc2_hh),
+  transform_df(df_sc3_hh)
+)
+
+df_plot$Housing <- recode(factor(df_plot$Housing, levels = c(
+  "all", "SU", "duplex", "small", "large")),
+  "all"= "All", "SU" = "Single Unit", "duplex" = "Duplex",
+  "small" = "Small MUD", "large" = "Large MUD"
+)
+
+df_plot$Scenario <- recode(factor(df_plot$Scenario, levels = c(
+  "Sc11", "Sc12", "Sc2", "Sc3")),
+  "Sc11"= "Indiv. access (1.5kW)", "Sc12"= "Indiv. access (7.0kW)", "Sc2"= "Shared access", "Sc3" = "Mixed"
+)
+
+df_plot$Load <- recode(factor(df_plot$Load, levels = c(
+  "wacc", "noacc150", "noaccinf")),
+  "wacc"= "Have access", "noacc150" = "[0-150kW]", "noaccinf" = "[+150kW]"
+)
+```
+
+```{r}
+df_plot <- df_plot %>%
+    filter(!(county == "Alpine"),
+           !(county == "Fresno" & IOU == "SCE"),
+           !(county == "Inyo" & IOU == "PGE"),
+           !(county == "Mariposa" & IOU == "SCE"),
+           !(county == "Mono" & IOU == "PGE"),
+           !(county == "Tuolumne" & IOU == "SCE"),
+           !(county == "Ventura" & IOU == "PGE"),
+           !(county == "Imperial"),
+           !(county == "Lassen"),
+           !(county == "Madera"),
+           !(county == "San Diego"),
+           !(county == "Siskiyou"),
+           !(county == "Trinity"))
+```
+
+```{r}
+#Save data in csv files for all counties and PGE
+
+# #Scenario 1.1 - With Access & All Housing
+# PGE_access_all = subset(df_plot, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Indiv. access (1.5kW)")
+# write.csv(PGE_access_all, "figures/access_files/with_access/PGE_all/PGE_access_sc11_all.csv", row.names = FALSE)
+# 
+# #Scenario 1.2 - With Access & All Housing
+# PGE_access_all = subset(df_plot, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Indiv. access (7.0kW)")
+# write.csv(PGE_access_all, "figures/access_files/with_access/PGE_all/PGE_access_sc12_all.csv", row.names = FALSE)
+# 
+# #Scenario 2 - With Access & All Housing
+# PGE_access_all = subset(df_plot, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Shared access")
+# write.csv(PGE_access_all, "figures/access_files/with_access/PGE_all/PGE_access_sc2_all.csv", row.names = FALSE)
+# 
+# #Scenario 3 - With Access & All Housing
+# PGE_access_all = subset(df_plot, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Mixed")
+# write.csv(PGE_access_all, "figures/access_files/with_access/PGE_all/PGE_access_sc3_all.csv", row.names = FALSE)
+
+#Scenario 1.1 - With Access & Single Unit
+PGE_access_all = subset(df_plot, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Indiv. access (1.5kW)")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc11_SU.csv", row.names = FALSE)
+
+#Scenario 1.2 - With Access & Single Unit
+PGE_access_all = subset(df_plot, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Indiv. access (7.0kW)")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc12_SU.csv", row.names = FALSE)
+
+#Scenario 2 - With Access & Single Unit
+PGE_access_all = subset(df_plot, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Shared access")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc2_SU.csv", row.names = FALSE)
+
+#Scenario 3 - With Access & Single Unit
+PGE_access_all = subset(df_plot, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Mixed")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc3_SU.csv", row.names = FALSE)
+```

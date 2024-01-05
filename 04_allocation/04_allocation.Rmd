@@ -1,0 +1,321 @@
+---
+title: "04_allocation"
+output: html_document
+---
+
+This code assigns hosting capacity to households
+
+```{r}
+library(tidyverse)
+library(tictoc)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(tidytext)
+library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
+library(readxl)
+library(colorspace)
+```
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/Grid_limits_EV_charging/03_features')
+SCEtypes = read.csv("IOUdata/SCE/circuitfiles/SCE_ICAalldemoclasses.csv", header=T, na.strings="?")
+SCE_ICAalldemo = read.csv("IOUdata/SCE/circuitfiles/SCE_ICAalldemo.csv", header=T, na.strings="?", colClasses=as.character(SCEtypes$x))
+
+PGEtypes = read.csv("IOUdata/PGE/circuitfiles/PGE_ICAalldemoclasses.csv", header=T, na.strings="?")
+PGE_ICAalldemo = read.csv("IOUdata/PGE/circuitfiles/PGE_ICAalldemo.csv", header=T, na.strings="?", colClasses=as.character(PGEtypes$x))
+```
+
+```{r}
+labsIOU <- c("IOU1" = "PGE", "IOU2" = "SCE")
+labsDER <- c("DER"="Load")
+```
+
+--------------------------------------------------------------------------------------------
+
+REMAINING HOSTING CAPACITY
+
+--------------------------------------------------------------------------------------------
+
+Hosting capacity by household within circuit polygons, scaled by length
+
+```{r}
+SCE_ICAalldemo <- SCE_ICAalldemo %>% 
+  mutate(ICL_max_lenWt = ICL_max * Length_Wt) %>%
+  mutate(ICL_kWphh_len = ICL_max_lenWt / tothh_Cpoly *1000)
+
+PGE_ICAalldemo <- PGE_ICAalldemo %>% 
+  mutate(ICL_max_lenWt = ICL_max * Length_Wt) %>%
+  mutate(ICL_kWphh_len = ICL_max_lenWt / tothh_Cpoly)
+```
+
+Scaling hosting capacity by number of households; percent of households a circuit segment serves relative to the whole circuit
+
+```{r}
+SCE_ICAalldemo <- SCE_ICAalldemo %>%
+  mutate(ICL_max_hhWt = ICL_max * tothh_pct) %>%
+  mutate(ICL_kWphh_hh = ICL_max_hhWt / tothh_Cpoly *1000)
+
+PGE_ICAalldemo <- PGE_ICAalldemo %>%
+  mutate(ICL_max_hhWt = ICL_max * tothh_pct) %>%
+  mutate(ICL_kWphh_hh = ICL_max_hhWt / tothh_Cpoly)
+```
+
+To what extent does each weighting approach under- or over-estimate the total amount of hosting capacity available on a given circuit? To check, we want to see how much lower the overall ICA values are relative to the overall max.
+
+```{r}
+# calculating weighted quantities and normalization factors
+SCE_ICAcheck <- SCE_ICAalldemo %>%
+  select(CircuitName, Length_m, Length_m_ctot, Length_Wt, 
+         ICL_max_ctot, ICL_max_lenWt, ICL_max_hhWt) %>%
+  group_by(CircuitName) %>%
+  summarise(Length_m = sum(Length_m, na.rm=TRUE),
+            Length_m_ctot = mean(Length_m_ctot, na.rm=TRUE),
+            Length_Wt_ctot = sum(Length_Wt, na.rm=TRUE),
+            nseg = n(),
+            ICL_max_ctot = mean(ICL_max_ctot, na.rm=TRUE),
+            ICL_max_lenWt = sum(ICL_max_lenWt, na.rm=TRUE),
+            ICL_max_hhWt = sum(ICL_max_hhWt, na.rm=TRUE)) %>%
+  mutate(normlen_ICL = ICL_max_lenWt/ICL_max_ctot) %>%
+  mutate(normhh_ICL = ICL_max_hhWt/ICL_max_ctot) %>%
+  mutate(normlen_ICL = ifelse((is.na(normlen_ICL)|is.infinite(normlen_ICL)|normlen_ICL==0), 1, normlen_ICL)) %>%
+  mutate(normhh_ICL = ifelse((is.na(normhh_ICL)|is.infinite(normhh_ICL)|normhh_ICL==0), 1, normhh_ICL))
+
+# merging normalization factors back into main file
+SCE_ICAalldemo <- merge(SCE_ICAalldemo, SCE_ICAcheck[, c("CircuitName", "normlen_ICL", "normhh_ICL")], by=c("CircuitName"), all.x=TRUE, suffixes = c("",""))
+
+# calculating normalized quantities
+SCE_ICAalldemo <- SCE_ICAalldemo %>%
+  mutate(ICL_max_lenWt_n = ICL_max_lenWt/normlen_ICL,
+         ICL_max_hhWt_n = ICL_max_hhWt/normhh_ICL) %>%
+  mutate(ICL_max_lenWt_nadj = ifelse(abs(ICL_max_lenWt_n)<abs(ICL_max), ICL_max_lenWt_n, ICL_max),
+         ICL_max_hhWt_nadj = ifelse(abs(ICL_max_hhWt_n)<abs(ICL_max), ICL_max_hhWt_n, ICL_max))
+
+# checking overall values
+SCE_ICAcheck2 <- SCE_ICAalldemo %>%
+  select(CircuitName, ends_with("_max_lenWt_n"), ends_with("_max_lenWt_nadj"), 
+         ends_with("_max_hhWt_n"), ends_with("_max_hhWt_nadj")) %>%
+  group_by(CircuitName) %>%
+  summarise(ICL_max_lenWt_n = sum(ICL_max_lenWt_n, na.rm=TRUE),
+            ICL_max_lenWt_nadj = sum(ICL_max_lenWt_nadj, na.rm=TRUE),
+            ICL_max_hhWt_n = sum(ICL_max_hhWt_n, na.rm=TRUE),
+            ICL_max_hhWt_nadj = sum(ICL_max_hhWt_nadj, na.rm=TRUE))
+
+SCE_ICAcheck <- merge(SCE_ICAcheck, SCE_ICAcheck2, by=c("CircuitName"), all.x=TRUE)
+rm(SCE_ICAcheck2)
+
+SCE_ICAcheck <- SCE_ICAcheck %>%
+  melt( id=c("CircuitName","Length_m","Length_m_ctot","Length_Wt_ctot","nseg",
+             "normlen_ICL", "normhh_ICL")) %>%
+  mutate(DER = factor(recode(substr(variable,1,6), 
+                             'ICL_ma'="ICL"), 
+                      levels=c("ICL")),
+         type = factor(recode(str_sub(variable,-8,-1), 'max_ctot'="ctot", 
+                              'ax_lenWt'="lenWt", '_lenWt_n'="lenWt_n", 
+                              'max_hhWt'="hhWt", 'x_hhWt_n'="hhWt_n", 
+                              'nWt_nadj'="lenWt_nadj", 'hWt_nadj'="hhWt_nadj")))
+
+ggplot(SCE_ICAcheck, aes(x=type, y=value)) + geom_boxplot() + facet_grid(~DER) + theme_light() +
+  theme(axis.text.x = element_text(angle=90)) + labs(x="",y="Hosting capacity (MW) per circuit")
+
+ggsave("SCE_ICAnormalization.png", path = "figures/", width=16, height=8)
+
+b <- SCE_ICAcheck %>% filter(type=="ctot" | type=="hhWt" | type=="hhWt_n" | type=="hhWt_nadj") %>%
+  ggplot( aes(x=type, y=value)) + geom_boxplot() + facet_grid(~DER) + theme_light() +
+  theme(axis.text.x = element_text(angle=90)) + labs(x="",y="Hosting capacity (MW) per circuit")
+b
+
+ggsave("SCE_ICAnormhh.png", path = "figures/", width=5, height=4)
+```
+
+```{r}
+# calculating weighted quantities and normalization factors
+PGE_ICAcheck <- PGE_ICAalldemo %>%
+  select(CircuitName, Length_m, Length_m_ctot, Length_Wt, 
+         ICL_max_ctot, ICL_max_lenWt, ICL_max_hhWt) %>%
+  group_by(CircuitName) %>%
+  summarise(Length_m = sum(Length_m, na.rm=TRUE),
+            Length_m_ctot = mean(Length_m_ctot, na.rm=TRUE),
+            Length_Wt_ctot = sum(Length_Wt, na.rm=TRUE),
+            nseg = n(),
+            ICL_max_ctot = mean(ICL_max_ctot, na.rm=TRUE),
+            ICL_max_lenWt = sum(ICL_max_lenWt, na.rm=TRUE),
+            ICL_max_hhWt = sum(ICL_max_hhWt, na.rm=TRUE)) %>%
+  mutate(normlen_ICL = ICL_max_lenWt/ICL_max_ctot) %>%
+  mutate(normhh_ICL = ICL_max_hhWt/ICL_max_ctot) %>%
+  mutate(normlen_ICL = ifelse((is.na(normlen_ICL)|is.infinite(normlen_ICL)|normlen_ICL==0), 1, normlen_ICL)) %>%
+  mutate(normhh_ICL = ifelse((is.na(normhh_ICL)|is.infinite(normhh_ICL)|normhh_ICL==0), 1, normhh_ICL))
+
+# merging normalization factors back into main file
+PGE_ICAalldemo <- merge(PGE_ICAalldemo, PGE_ICAcheck[, c("CircuitName", "normlen_ICL", "normhh_ICL")], by=c("CircuitName"), all.x=TRUE, suffixes = c("",""))
+
+# calculating normalized quantities
+PGE_ICAalldemo <- PGE_ICAalldemo %>%
+  mutate(ICL_max_lenWt_n = ICL_max_lenWt/normlen_ICL,
+         ICL_max_hhWt_n = ICL_max_hhWt/normhh_ICL) %>%
+  mutate(ICL_max_lenWt_nadj = ifelse(abs(ICL_max_lenWt_n)<abs(ICL_max), ICL_max_lenWt_n, ICL_max),
+         ICL_max_hhWt_nadj = ifelse(abs(ICL_max_hhWt_n)<abs(ICL_max), ICL_max_hhWt_n, ICL_max))
+
+# checking overall values
+PGE_ICAcheck2 <- PGE_ICAalldemo %>%
+  select(CircuitName, ends_with("_max_lenWt_n"), ends_with("_max_lenWt_nadj"), 
+         ends_with("_max_hhWt_n"), ends_with("_max_hhWt_nadj")) %>%
+  group_by(CircuitName) %>%
+  summarise(ICL_max_lenWt_n = sum(ICL_max_lenWt_n, na.rm=TRUE),
+            ICL_max_lenWt_nadj = sum(ICL_max_lenWt_nadj, na.rm=TRUE),
+            ICL_max_hhWt_n = sum(ICL_max_hhWt_n, na.rm=TRUE),
+            ICL_max_hhWt_nadj = sum(ICL_max_hhWt_nadj, na.rm=TRUE))
+
+PGE_ICAcheck <- merge(PGE_ICAcheck, PGE_ICAcheck2, by=c("CircuitName"), all.x=TRUE)
+rm(PGE_ICAcheck2)
+
+PGE_ICAcheck <- PGE_ICAcheck %>%
+  melt( id=c("CircuitName","Length_m","Length_m_ctot","Length_Wt_ctot","nseg",
+             "normlen_ICL", "normhh_ICL")) %>%
+  mutate(DER = factor(recode(substr(variable,1,6), 
+                             'ICL_ma'="ICL"), 
+                      levels=c("ICL")),
+         type = factor(recode(str_sub(variable,-8,-1), 'max_ctot'="ctot", 
+                              'ax_lenWt'="lenWt", '_lenWt_n'="lenWt_n", 
+                              'max_hhWt'="hhWt", 'x_hhWt_n'="hhWt_n", 
+                              'nWt_nadj'="lenWt_nadj", 'hWt_nadj'="hhWt_nadj")))
+
+ggplot(PGE_ICAcheck, aes(x=type, y=value/1000)) + geom_boxplot() + facet_grid(~DER) + theme_light() +
+  theme(axis.text.x = element_text(angle = 90)) + labs(x="",y="Hosting capacity (MW) per circuit")
+
+ggsave("PGE_ICAnormalization.png", path = "figures/", width=16, height=8)
+
+a <- PGE_ICAcheck %>% filter(type=="ctot" | type=="hhWt" | type=="hhWt_n" | type=="hhWt_nadj") %>%
+  ggplot( aes(x=type, y=value/1000)) + geom_boxplot() + facet_grid(~DER) + theme_light() +
+  theme(axis.text.x = element_text(angle = 90)) + labs(x="",y="Hosting capacity (MW) per circuit")
+a
+
+ggsave("PGE_ICAnormhh.png", path = "figures/", width=5, height=4)
+```
+
+
+```{r}
+rbind(mutate(filter(PGE_ICAcheck, type=="ctot" | type=="hhWt" | type=="hhWt_n" | type=="hhWt_nadj"), IOU="PGE", value=value/1000),
+      mutate(filter(SCE_ICAcheck, type=="ctot" | type=="hhWt" | type=="hhWt_n" | type=="hhWt_nadj"), IOU="SCE")) %>%
+  ggplot( aes(x=type, y=value)) + geom_boxplot() + 
+  facet_grid(IOU~DER, scales="free_y") + theme_light() +
+  theme(axis.text.x = element_text(angle=90, size=8)) + labs(x="Normalization method",y="Hosting capacity (MW) per circuit")
+
+#plot_grid(a, b, labels=c('a','b'), label_size=12)
+
+ggsave("IOU_normhh.png", path="figures/", width=8.5, height=5)
+ggsave("IOU_normhh.pdf", path="figures/", width=8.5, height=5)
+```
+
+Decision: We will base per-household kW calculations on the normalized & adjusted population-scaled values.
+
+```{r}
+SCE_ICAalldemo <- SCE_ICAalldemo %>%
+  mutate(ICL_kWphh = ICL_max_hhWt_nadj / tothh_Cpoly *1000) %>%
+  mutate(ICL_kWphh_cap = ifelse(ICL_kWphh>=50, 50, ifelse(ICL_kWphh<=-10, -10, ICL_kWphh)))
+
+PGE_ICAalldemo <- PGE_ICAalldemo %>%
+  mutate(ICL_kWphh = ICL_max_hhWt_nadj / tothh_Cpoly) %>%
+  mutate(ICL_kWphh_cap = ifelse(ICL_kWphh>=50, 50, ifelse(ICL_kWphh<=-10, -10, ICL_kWphh)))
+```
+
+Check: is the hosting capacity on any circuit/block group combo greater than its allowed value?
+
+```{r}
+nrow(SCE_ICAalldemo %>% filter(ICL_max_lenWt_n > ICL_max) %>% select(CircuitName, starts_with("ICL_")))
+
+nrow(SCE_ICAalldemo %>% filter(ICL_max_hhWt_n > ICL_max) %>% 
+       select(CircuitName, Length_Wt, tothh_pct, starts_with("ICL_"), normlen_ICL, normhh_ICL))
+```
+
+```{r}
+nrow(PGE_ICAalldemo %>% filter(ICL_max_lenWt_n > ICL_max) %>% select(CircuitName, starts_with("ICL_")))
+
+nrow(PGE_ICAalldemo %>% filter(ICL_max_hhWt_n > ICL_max) %>% 
+       select(CircuitName, Length_Wt, tothh_pct, starts_with("ICL_"), normlen_ICL, normhh_ICL))
+```
+
+Cleaning up infinite values:
+
+```{r}
+SCE_ICAalldemo[mapply(is.infinite, SCE_ICAalldemo)] <- NA
+PGE_ICAalldemo[mapply(is.infinite, PGE_ICAalldemo)] <- NA
+```
+
+--------------------------------------------------------------------------------------------
+
+EXPORTING
+
+--------------------------------------------------------------------------------------------
+
+Rename & subset to remove unrealistic population totals:
+
+```{r}
+PGE_ICAalldemo <- PGE_ICAalldemo %>% dplyr::rename("SAIDI5yravg"="SAIDI3a5yravg")
+
+SCE_ICAalldemo_real = subset(SCE_ICAalldemo, tothh_Cpoly >= 1)
+PGE_ICAalldemo_real = subset(PGE_ICAalldemo, tothh_Cpoly >= 1)
+
+SCE_ICAalldemo <- SCE_ICAalldemo %>% mutate(Cpoly = paste0(GEOID," ",CircuitName))
+PGE_ICAalldemo <- PGE_ICAalldemo %>% mutate(Cpoly = paste0(GEOID," ",CircuitName))
+```
+
+Exporting data
+
+```{r}
+write.csv(SCE_ICAalldemo, file="IOUdata/SCE/circuitfiles/SCE_ICAalldemoalloc.csv", row.names=FALSE)
+write.csv(SCE_ICAalldemo_real, file="IOUdata/SCE/circuitfiles/SCE_ICAalldemorealalloc.csv", row.names=FALSE)
+
+SCEtypes <- sapply(SCE_ICAalldemo,class)
+
+write.csv(SCEtypes, file="IOUdata/SCE/circuitfiles/SCE_ICAalldemoallocclasses.csv", row.names=FALSE)
+
+
+write.csv(PGE_ICAalldemo, file="IOUdata/PGE/circuitfiles/PGE_ICAalldemoalloc.csv", row.names=FALSE)
+write.csv(PGE_ICAalldemo_real, file="IOUdata/PGE/circuitfiles/PGE_ICAalldemorealalloc.csv", row.names=FALSE)
+
+PGEtypes <- sapply(PGE_ICAalldemo,class)
+
+write.csv(PGEtypes, file="IOUdata/PGE/circuitfiles/PGE_ICAalldemoallocclasses.csv", row.names=FALSE)
+```
+
+
+Cleaned-up files to use in random forests and linear and logistic regression runs
+
+```{r}
+idanddepfeatures = c("CircuitName","GEOID","ICL_kWphh","ICL_kWphh_cap")
+infrfeatures = c("CircVolt_kV","Length_m","Length_m_ctot")
+servgeofeatures = c("ResCust","Res_pct","Com_pct","Ind_pct","Agr_pct","Oth_pct",
+                    "tothh_Cpoly","tothh_ctot","tothh_pct","tothh_perkm")
+
+demofeatures = c("tothh", "racediversity", "black_pct", "asian_pct", "nlxwhite_pct", "latinx_pct", 
+                 "inc50kbelow_pct", "inc150kplus_pct", "medhhinc", "edavgyrs", 
+                 "ownerocc_pct", "singleunit_pct", "MUD_pct", "duplex_pct", "smallmulti_pct",
+                 "largemulti_pct", "unitsavg", "medyrbuilt", "hhdensity_hhsqkm",
+                 "polexposure_pctl", "polenvt_pctl", "popsens_pctl", "lingisolation_pctl")
+
+#SCE
+write.csv(SCE_ICAalldemo[, c("Cpoly", idanddepfeatures, infrfeatures, "Phase_max", "Phase_min", "CLSmax", "CLSmin", 
+                             servgeofeatures, demofeatures)], 
+          file="IOUdata/SCE/circuitfiles/SCE_ICAalldemotrees.csv", row.names=FALSE)
+
+write.csv(SCE_ICAalldemo_real[, c(idanddepfeatures, infrfeatures, "Phase_max", "Phase_min", "CLSmax", "CLSmin", 
+                                  servgeofeatures, demofeatures)], 
+          file="IOUdata/SCE/circuitfiles/SCE_ICAalldemotrees_real.csv", row.names=FALSE)
+
+write.csv(data.frame(x = sapply(SCE_ICAalldemo_real[c(idanddepfeatures, infrfeatures, "Phase_max", "Phase_min", "CLSmax", "CLSmin", 
+                                  servgeofeatures, demofeatures)], class)),
+          file = "IOUdata/SCE/circuitfiles/SCE_ICAalldemotrees_real_classes.csv", row.names = FALSE)
+
+#PGE
+write.csv(PGE_ICAalldemo[, c("Cpoly", idanddepfeatures, infrfeatures, "ICA_pct", servgeofeatures, demofeatures)], 
+          file="IOUdata/PGE/circuitfiles/PGE_ICAalldemotrees.csv", row.names=FALSE)
+
+write.csv(PGE_ICAalldemo_real[, c(idanddepfeatures, infrfeatures, "ICA_pct", servgeofeatures, demofeatures)], 
+          file="IOUdata/PGE/circuitfiles/PGE_ICAalldemotrees_real.csv", row.names=FALSE)
+
+write.csv(data.frame(x = sapply(PGE_ICAalldemo_real[c(idanddepfeatures, infrfeatures, "ICA_pct", servgeofeatures, demofeatures)], class)),
+          file = "IOUdata/PGE/circuitfiles/PGE_ICAalldemotrees_real_classes.csv", row.names = FALSE)
+```
+
+

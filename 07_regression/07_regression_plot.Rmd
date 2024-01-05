@@ -1,0 +1,233 @@
+---
+title: "07_regression_plot"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+library(readr)
+library(ggplot2)
+library(cowplot)
+library(gridExtra)
+# library(iRF)
+```
+
+```{r}
+#Extract SCE and PGE linear evaluation metrics
+lm_eval_files <- list.files(path = "lm_eval_metrics", pattern = "\\.csv$", full.names = TRUE)
+rf_eval_files <- list.files(path = "eval_metrics", pattern = "\\.csv$", full.names = TRUE)
+```
+
+```{r}
+extract_data <- function(file_name) {
+  parts <- strsplit(basename(file_name), "_")[[1]]
+  IOU <- parts[1]
+  model <- parts[2]
+  var <- gsub(".csv", "", parts[3])
+  hhdens <- gsub(".csv", "", parts[4])
+  
+  col_types <- cols(
+    X1 = col_character(),
+    X2 = col_double()
+  )
+
+  data <- read_csv(file_name, skip = 1, col_names = FALSE, col_types = col_types)
+  names(data) <- c("Metric", "Value")
+
+  R2 <- data[[1, 2]]
+  MSE <- data[[2, 2]]
+  RMSE <- data[[3, 2]]
+
+  tibble(IOU = IOU, model = model, group_var = var, hhdens = hhdens, r2 = R2, mse = MSE, rmse = RMSE)
+}
+```
+
+```{r}
+lm_eval_df <- map_df(lm_eval_files, extract_data)
+rf_eval_df <- map_df(rf_eval_files, extract_data)
+
+model_eval_df <- rbind(lm_eval_df, rf_eval_df)
+rm(lm_eval_df, rf_eval_df)
+
+model_eval_df$group_var <- ifelse(is.na(model_eval_df$hhdens), 
+                                 model_eval_df$group_var, 
+                                 paste(model_eval_df$group_var, model_eval_df$hhdens, sep = "_"))
+
+plot_eval_df <- model_eval_df %>% filter(!(group_var == "all_hhdens" | group_var == "house"))
+
+
+#Plotting evaluation metrics
+plot_eval_df <- plot_eval_df %>%
+  mutate(
+    IOU = recode(factor(IOU, levels=c("PGE", "SCE")), 
+                 'PGE'="PG&E"),
+    model = recode(factor(model, levels=c("LinModEval", "RFEval")), 
+                   'LinModEval'="Linear regression", 
+                   'RFEval'="Random forests regression"),
+    group_var = recode(factor(group_var, levels=c("all", "service", "infra", "demo", "demo_hhdens")),
+                       'all'="All", 
+                       'service'="Service",
+                       'infra'="Infrastructure", 
+                       'demo'="Demographic",
+                       'demo_hhdens'="Demo - hhdensity")
+  )
+
+a <- ggplot(plot_eval_df, aes(x=group_var, y=rmse, color=model)) + 
+      theme_light() + 
+      theme(legend.position="bottom") + 
+      facet_wrap(~IOU, scales="free", nrow=2) + 
+      geom_line(aes(group=model)) + geom_point() +
+      labs(x="Variable group", y="Root mean squared error (kW/hh)", color="") +
+      #scale_color_discrete_qualitative(palette="Dark3") +
+      coord_cartesian(ylim=c(0,6))
+
+ggsave("regression_eval_metrics.png", a, path="figures_eval/", width=8, height=5.5)
+print(a)
+```
+
+```{r}
+#Extract SCE and PGE features importance
+process_FI_data <- function(filename, iou_value) {
+  fi_df <- read.csv(paste0("feat_imp/", filename), header = TRUE, na.strings = "?")
+  fi_df <- subset(fi_df, X != "ICA_pct")
+  fi_df$IOU <- iou_value
+  names(fi_df)[1] <- "feature"
+  names(fi_df)[2] <- "FI_value"
+  return(fi_df)
+}
+
+PGE_FI_all_df <- process_FI_data("PGE_FeatImp_all.csv", "PGE")
+SCE_FI_all_df <- process_FI_data("SCE_FeatImp_all.csv", "SCE")
+
+IOU_FI_all_df <- rbind(PGE_FI_all_df, SCE_FI_all_df)
+rm(PGE_FI_all_df, SCE_FI_all_df)
+```
+
+```{r}
+plots <- list()
+
+for(iou_val in unique(IOU_FI_all_df$IOU)) {
+  # Filter the data for the current IOU
+  data_subset <- filter(IOU_FI_all_df, IOU == iou_val)
+  
+  imp <- ggplot(data_subset, aes(x=reorder(feature, -FI_value), y=FI_value*100)) +
+    geom_bar(stat="identity") +
+    facet_wrap(~IOU, scales="free_x", nrow=1) +
+    labs(x="", y="Importance value (%)") +
+    theme_light() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  
+  # Add the plot to the list
+  plots[[iou_val]] <- imp
+}
+
+b <- do.call(grid.arrange, c(plots, ncol=1))
+rm(data_subset, plots, imp)
+ggsave("RF_importance_values.png", b, path="figures_eval/", width=8, height=5.5)
+print(b)
+```
+
+```{r}
+#Combine plots
+# Combine final_plot and another_plot in one row
+combined_plot <- plot_grid(a, NULL, b, ncol = 3, rel_widths = c(1, 0.1, 1), scale=0.95, labels=c('a','','b'), label_size=12)
+
+ggsave("Combined_Row_Plot.png", combined_plot, path="figures_eval/", width=12, height=7.5)
+
+# Print the combined plot
+print(combined_plot)
+```
+
+--------------------------------------------------
+
+# RUNNING INTEGRATED RANDOM FOREST REGRESSION
+For more explanation: https://github.com/sumbose/iRF
+
+--------------------------------------------------
+```{r}
+#Extract SCE and PG&E ICA access data
+#Real data (tothh_Cpoly > 1)
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/Grid_limits_EV_charging/04_allocation/IOUdata')
+
+SCEtypes <- read.csv("SCE/circuitfiles/SCE_ICAalldemotrees_real_classes.csv", header = TRUE, na.strings = "?")
+SCE_realdata <- read.csv("SCE/circuitfiles/SCE_ICAalldemotrees_real.csv", header = TRUE, na.strings = "?", colClasses = as.character(SCEtypes$x))
+
+PGEtypes <- read.csv("PGE/circuitfiles/PGE_ICAalldemotrees_real_classes.csv", header = TRUE, na.strings = "?")
+PGE_realdata <- read.csv("PGE/circuitfiles/PGE_ICAalldemotrees_real.csv", header = TRUE, na.strings = "?", colClasses = as.character(PGEtypes$x))
+
+rm(PGEtypes, SCEtypes)
+```
+
+```{r}
+#Create different sets of features (X)
+col = c("tothh_Cpoly", "ICL_kWphh_cap")
+
+demof = c("tothh", "racediversity", "black_pct", "asian_pct", "nlxwhite_pct", "latinx_pct",
+                 "inc50kbelow_pct", "inc150kplus_pct", "medhhinc", "edavgyrs",
+                 "polexposure_pctl", "polenvt_pctl", "popsens_pctl", "lingisolation_pctl")
+
+servf = c('Res_pct', 'Com_pct', 'Ind_pct', 'Agr_pct', 'Oth_pct', #'tothh_Cpoly', 
+                        'tothh_ctot', 'tothh_pct', 'tothh_perkm', 'ResCust')
+
+infraf = c("CircVolt_kV", "Length_m", "Length_m_ctot")
+
+housef = c('hhdensity_hhsqkm', 'ownerocc_pct', 'singleunit_pct', 'unitsavg', 'medyrbuilt', 
+                        'duplex_pct', 'smallmulti_pct', 'largemulti_pct')
+
+allf = c(demof, servf, infraf, housef)
+```
+
+```{r}
+#ALL FEATURES - Essayer d'implémenter rfImpute pour contourner les NAs
+SCE_all_df = select(SCE_realdata, c(all_of(col), all_of(allf)))
+PGE_all_df = select(PGE_realdata, c(all_of(col), all_of(allf)))
+
+SCE_all_df <- SCE_all_df %>% filter(!is.na(ICL_kWphh_cap))
+PGE_all_df <- PGE_all_df %>% filter(!is.na(ICL_kWphh_cap))
+
+SCE_all_df_na <- rfImpute(ICL_kWphh_cap ~ ., SCE_all_df)
+```
+
+```{r}
+SCE_all_df <- na.omit(SCE_all_df)
+PGE_all_df <- na.omit(PGE_all_df)
+```
+
+```{r}
+SCE_all_irf <- iRF(x = SCE_all_df[, !(names(SCE_all_df) %in% "ICL_kWphh_cap")], y = SCE_all_df$ICL_kWphh_cap, na.action = na.roughfix, weights = SCE_all_df$tothh_Cpoly, interactions.return = TRUE)
+# PGE_all_irf <- iRF(x = PGE_all_df[, !(names(PGE_all_df) %in% "ICL_kWphh_cap")], y = PGE_all_df$ICL_kWphh_cap, weights = PGE_all_df$tothh_Cpoly, interactions.return = TRUE)
+```
+
+```{r}
+write.csv(PGE_all_irf$interaction, file = "PGE_all_irf_interaction.csv", row.names = FALSE)
+write.csv(SCE_all_irf$interaction, file = "SCE_all_irf_interaction.csv", row.names = FALSE)
+```
+
+```{r}
+#Improve plot on interactions
+PGE_all_interaction <- PGE_all_irf$interaction[order(-prevalence)] %>%
+  mutate(IOU = "PGE")
+SCE_all_interaction <- SCE_all_irf$interaction[order(-prevalence)] %>%
+  mutate(IOU = "SCE")
+
+PGE_top_interaction <- PGE_all_interaction[1:20,]
+SCE_top_interaction <- SCE_all_interaction[1:20,]
+
+top_interaction <- rbind(PGE_top_interaction, SCE_top_interaction)
+
+# Plotting
+c <- ggplot(top_interaction, aes(x = reorder(int, -prevalence), y = prevalence)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~IOU, scales="free_x", nrow=2) +
+  labs(x = "Interaction", y = "Prevalence") +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggsave("Top_Interactions.png", c, path="figures_eval/", width=12, height=7.5)
+```
+
+```{r}
+stabilityScore(x = PGE_all_df[, !(names(PGE_all_df) %in% "ICL_kWphh_cap")], y = PGE_all_df$ICL_kWphh_cap, weights = PGE_all_df$tothh_Cpoly)
+```
+

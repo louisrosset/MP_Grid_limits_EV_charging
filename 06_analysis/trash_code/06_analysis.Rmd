@@ -1,0 +1,174 @@
+---
+title: "06_analysis"
+author: "Louis Rosset"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(Hmisc)
+```
+
+```{r}
+#Extract SCE and PG&E ICA access data
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata/SCE')
+
+SCEtypes <- read.csv("circuitfiles/SCE_ICAalldemoallocclasses.csv", header = TRUE, na.strings = "?")
+SCE_ICAaccess <- read.csv("circuitfiles/SCE_ICAalldemoalloc.csv", header = TRUE, na.strings = "?", colClasses = as.character(SCEtypes$x))
+
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata/PGE')
+
+PGEtypes <- read.csv("circuitfiles/PGE_ICAalldemoallocclasses.csv", header = TRUE, na.strings = "?")
+PGE_ICAaccess <- read.csv("circuitfiles/PGE_ICAalldemoalloc.csv", header = TRUE, na.strings = "?", colClasses = as.character(PGEtypes$x))
+```
+
+
+```{r}
+# B25024 - UNITS IN STRUCTURE, including number of structures
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/Aggregate_Data_updated')
+
+ACS_2021_bg_units = read.csv("blockgroup/ACS_21_5YR_B25024_with_ann.csv", header=T, sep = ";", skip=1, na.strings="null", colClasses=c("factor", "factor", "character",rep("character",22)))
+colnames(ACS_2021_bg_units) <- c("GEOid_bg", "GEOID10", "bgcountystate", "totstr", "totstr_err", "units1det", "units1det_err", "units1att", "units1att_err", "units2", "units2_err", "units3to4", "units3to4_err", "units5to9", "units5to9_err", "units10to19", "units10to19_err", "units20to49", "units20to49_err", "units50plus", "units50plus_err", "mobilehome", "mobilehome_err", "boatrvvan", "boatrvvan_err")
+# Convert the last 22 columns to numeric and remove double quotes
+ACS_2021_bg_units <- ACS_2021_bg_units %>%
+  mutate_at(vars(tail(names(.), 22)), ~as.numeric(gsub('"', '', .)))
+# creating some new summary columns
+ACS_2021_bg_units <- ACS_2021_bg_units %>%
+  mutate(singleunit = units1att + units1det,
+         duplex = units2,
+         smallmulti = units3to4 + units5to9 + units10to19,
+         largemulti = units20to49 + units50plus,
+         totstr_wout_extra = totstr - mobilehome - boatrvvan) %>%
+  mutate(singleunit_pct = singleunit / totstr,
+         duplex_pct = duplex / totstr,
+         smallmulti_pct = smallmulti / totstr,
+         largemulti_pct = largemulti / totstr,
+         units3to4_pct = units3to4 / totstr,
+         units5to9_pct = units5to9 / totstr,
+         units10to19_pct = units10to19 / totstr,
+         units20to49_pct = units20to49 / totstr,
+         units50plus_pct = units50plus / totstr
+         ) %>%
+  mutate(unitsavg = (singleunit*1 + duplex*2 + units3to4*3.5 + units5to9*7 + units10to19*14.5 + units20to49*34.5 + units50plus*50) / totstr)
+```
+
+------------------------------------------------------------------------
+
+GRID LIMITS - HOSTING CAPACITY LOAD PER STRUCTURE AND PROPORTION OF MUDS
+
+------------------------------------------------------------------------
+```{r}
+#PG&E ACCESS
+PGE_ICAaccess <- merge(PGE_ICAaccess, ACS_2021_bg_units[, c("GEOID10", "singleunit", "duplex", "units3to4", "units5to9", "units10to19", "units20to49", "units50plus", "smallmulti", "largemulti", "duplex_pct", "smallmulti_pct", "largemulti_pct", "units3to4_pct", "units5to9_pct", "units10to19_pct", "units20to49_pct", "units50plus_pct")], by = "GEOID10")
+
+PGE_ICAaccess_filtered <- PGE_ICAaccess[, c("CircuitName", "GEOID", "county", "nearbycity", "PGEarea_Wt", "CpolyA_Wt", "tothh", "tothh_Cpoly", "totpop", "totpop_Cpoly", "totstr", "totstr_pct", "totstr_Cpoly", "ICL_kWphh", "ICL_max", "ICL_max_ctot", "unitsavg", "singleunit", "duplex", "units3to4", "units5to9", "units10to19", "units20to49", "units50plus", "smallmulti", "largemulti", "singleunit_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct", "units3to4_pct", "units5to9_pct", "units10to19_pct", "units20to49_pct", "units50plus_pct")]
+
+PGE_ICAaccess_filtered <- PGE_ICAaccess_filtered %>%
+  mutate(ICL_max_strWt = ICL_max * totstr_pct) %>%
+  mutate(normstr_ICL = ICL_max_strWt/ICL_max_ctot) %>%
+  mutate(normstr_ICL = ifelse((is.na(normstr_ICL)|is.infinite(normstr_ICL)|normstr_ICL==0), 1, normstr_ICL))%>%
+  mutate(ICL_max_strWt_n = ICL_max_strWt/normstr_ICL)%>%
+  mutate(ICL_max_strWt_nadj = ifelse(abs(ICL_max_strWt_n)<abs(ICL_max), ICL_max_strWt_n, ICL_max))%>%
+  mutate(ICL_kWstr = ICL_max_strWt_nadj / totstr_Cpoly)%>%
+  mutate(MUD_pct = duplex_pct + smallmulti_pct + largemulti_pct)
+
+PGE_ICAaccess_filtered <- PGE_ICAaccess_filtered %>%
+  mutate(tothh_SU_Cpoly = singleunit_pct*tothh_Cpoly) %>%
+  mutate(tothh_duplex_Cpoly = duplex_pct*tothh_Cpoly) %>%
+  mutate(tothh_3to4_Cpoly = units3to4_pct*tothh_Cpoly) %>%
+  mutate(tothh_5to9_Cpoly = units5to9_pct*tothh_Cpoly) %>%
+  mutate(tothh_10to19_Cpoly = units10to19_pct*tothh_Cpoly) %>%
+  mutate(tothh_20to49_Cpoly = units20to49_pct*tothh_Cpoly) %>%
+  mutate(tothh_50plus_Cpoly = units50plus_pct*tothh_Cpoly)
+```
+
+```{r}
+#SCE ACCESS
+SCE_ICAaccess <- merge(SCE_ICAaccess, ACS_2021_bg_units[, c("GEOID10", "singleunit", "duplex", "units3to4", "units5to9", "units10to19", "units20to49", "units50plus", "smallmulti", "largemulti", "duplex_pct", "smallmulti_pct", "largemulti_pct", "units3to4_pct", "units5to9_pct", "units10to19_pct", "units20to49_pct", "units50plus_pct")], by.x = "GEOID", by.y = "GEOID10")
+
+SCE_ICAaccess_filtered <- SCE_ICAaccess[, c("CircuitName", "GEOID", "county", "nearbycity", "SCEarea_Wt", "CpolyA_Wt", "tothh", "tothh_Cpoly", "totpop", "totpop_Cpoly", "totstr", "totstr_pct", "totstr_Cpoly", "ICL_kWphh", "ICL_max", "ICL_max_ctot", "unitsavg", "singleunit", "duplex", "units3to4", "units5to9", "units10to19", "units20to49", "units50plus", "smallmulti", "largemulti", "singleunit_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct", "units3to4_pct", "units5to9_pct", "units10to19_pct", "units20to49_pct", "units50plus_pct")]
+
+SCE_ICAaccess_filtered <- SCE_ICAaccess_filtered %>%
+  mutate(ICL_max_strWt = ICL_max * totstr_pct) %>%
+  mutate(normstr_ICL = ICL_max_strWt/ICL_max_ctot) %>%
+  mutate(normstr_ICL = ifelse((is.na(normstr_ICL)|is.infinite(normstr_ICL)|normstr_ICL==0), 1, normstr_ICL))%>%
+  mutate(ICL_max_strWt_n = ICL_max_strWt/normstr_ICL)%>%
+  mutate(ICL_max_strWt_nadj = ifelse(abs(ICL_max_strWt_n)<abs(ICL_max), ICL_max_strWt_n, ICL_max))%>%
+  mutate(ICL_kWstr = ICL_max_strWt_nadj / totstr_Cpoly)%>%
+  mutate(MUD_pct = duplex_pct + smallmulti_pct + largemulti_pct)
+
+SCE_ICAaccess_filtered <- SCE_ICAaccess_filtered %>%
+  mutate(tothh_SU_Cpoly = singleunit_pct*tothh_Cpoly) %>%
+  mutate(tothh_duplex_Cpoly = duplex_pct*tothh_Cpoly) %>%
+  mutate(tothh_3to4_Cpoly = units3to4_pct*tothh_Cpoly) %>%
+  mutate(tothh_5to9_Cpoly = units5to9_pct*tothh_Cpoly) %>%
+  mutate(tothh_10to19_Cpoly = units10to19_pct*tothh_Cpoly) %>%
+  mutate(tothh_20to49_Cpoly = units20to49_pct*tothh_Cpoly) %>%
+  mutate(tothh_50plus_Cpoly = units50plus_pct*tothh_Cpoly)
+```
+
+```{r}
+weighted.median <- function(x, w) {
+  data <- data.frame(x, w)
+  data <- data[order(data$x), ]
+  cum_weight <- cumsum(data$w)
+  mid_weight <- sum(data$w) / 2
+  median_val <- data$x[which.max(cum_weight >= mid_weight)]
+  return(median_val)
+}
+```
+
+```{r}
+df = PGE_ICAaccess_filtered
+df = df[which(!is.na(df[["singleunit_pct"]])),]
+
+df$var_bin = as.numeric(as.character(cut(df[["singleunit_pct"]], 
+        breaks=seq(0, 1, 0.05), 
+        labels=seq(0, 1-0.05, by=0.05))))
+df$var_bin = ifelse(df$var_bin>1, 1, df$var_bin)
+df$var_bin = ifelse(df[["singleunit_pct"]]==0, 0, df$var_bin)
+
+```
+
+```{r}
+analyze_feature <- function(feature_col, capacity_col, household_col) {
+   plot <- df %>%
+    # Step 1: Binning
+    #done function before
+    
+    # Step 2: Calculate median per bin
+    group_by(var_bin) %>%
+    summarise(
+      median_capacity = weighted.median(!!sym(capacity_col), !!sym(household_col)),
+      total_households = sum(!!sym(household_col)),
+      .groups = 'drop'
+    ) %>%
+    
+    # Step 3: LOESS smoothing and plot
+    ggplot(aes(x = var_bin, y = median_capacity)) +
+    geom_point(aes(y=median_capacity, alpha=total_households/1000), size=2, color="black") +
+    geom_smooth(aes(y=median_capacity), method = "loess", se = TRUE, span = 0.75, level = 0.90, fill = "skyblue") + 
+    geom_smooth(aes(y=median_capacity), method = "loess", se = TRUE, span = 0.75, level = 0.50, fill = "steelblue") + 
+    scale_x_continuous(breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1.0), 
+                       labels = c('0%', '20%', '40%', '60%', '80%', '100%'),
+                       limits = c(0, 1.0)) + 
+    scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+    scale_alpha_continuous(guide = guide_legend(title = expression("Households (x10"^"3)"))) +
+    labs(
+        title = paste("LOESS smoothing for", feature_col),
+        x = 'Households [%]',
+        y = 'Median Hosting Capacity (kW)',
+        color = 'Legend'
+    ) +
+    theme_minimal()
+  
+    ggsave(filename = paste0("plot_", feature_col, ".png"), plot = plot, width = 7, height = 7)
+    print(plot)
+}
+
+# Execute the function for a specific demographic feature
+analyze_feature("singleunit_pct", "ICL_kWphh", "tothh_Cpoly")
+```
+

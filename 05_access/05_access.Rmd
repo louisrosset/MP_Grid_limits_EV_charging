@@ -1,0 +1,305 @@
+---
+title: "05_access"
+output: html_document
+---
+
+This code calculates overall grid access for households in PG&E and SCE service territories, considering housing types.
+
+```{r}
+library(tidyverse)
+library(tictoc)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(tidytext)
+library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
+library(readxl)
+library(colorspace)
+library(cowplot)
+```
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/Grid_limits_EV_charging/04_allocation/IOUdata')
+SCEtypes = read.csv("SCE/circuitfiles/SCE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+SCE_ICAaccess = read.csv("SCE/circuitfiles/SCE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(SCEtypes$x))
+
+PGEtypes = read.csv("PGE/circuitfiles/PGE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+PGE_ICAaccess = read.csv("PGE/circuitfiles/PGE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(PGEtypes$x))
+
+at <- c("1", "1.5", "2.0", "3.0", "4.0", "4.5", "5.0", "6.0", "7.0", "8.0", "9.0", "10.")
+
+###EXTRA FEATURES FOR HOUSING###
+SCEhousingtypes <- read.csv("SCE/circuitfiles/SCE_ICAalldemo_housing_classes.csv", header = TRUE, na.strings = "?")
+SCE_ICA_housing <- read.csv("SCE/circuitfiles/SCE_ICAalldemoalloc_housing.csv", header = TRUE, na.strings = "?", colClasses = as.character(SCEhousingtypes$x))
+
+PGEhousingtypes <- read.csv("PGE/circuitfiles/PGE_ICAalldemo_housing_classes.csv", header = TRUE, na.strings = "?")
+PGE_ICA_housing <- read.csv("PGE/circuitfiles/PGE_ICAalldemoalloc_housing.csv", header = TRUE, na.strings = "?", colClasses = as.character(PGEhousingtypes$x))
+
+#Correcting some duplicates problem
+PGE_ICAaccess <- PGE_ICAaccess[!duplicated(PGE_ICAaccess[, c("GEOID", "CircuitName")]), ]
+PGE_ICA_housing <- PGE_ICA_housing[!duplicated(PGE_ICA_housing[, c("GEOID", "CircuitName")]), ]
+
+SCE_ICAaccess <- merge(SCE_ICAaccess, SCE_ICA_housing[, c("GEOID", "CircuitName", "tothh_Cpoly", "tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")], by = c("GEOID", "CircuitName", "tothh_Cpoly"))
+
+PGE_ICAaccess <- merge(PGE_ICAaccess, PGE_ICA_housing[, c("GEOID", "CircuitName", "tothh_Cpoly", "tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")], by = c("GEOID", "CircuitName", "tothh_Cpoly"))
+
+rm(PGE_ICA_housing, SCE_ICA_housing, PGEhousingtypes, SCEhousingtypes, PGEtypes, SCEtypes)
+### ------------------------###
+```
+
+```{r}
+labsIOU <- function(x) ifelse(x == "PGE", "PG&E", "SCE")
+labsDER <- function(x) ifelse(x == "ICL", "Load", NA)
+housing <- c("SU", "duplex", "3to4", "5to9", "10to19", "20to49", "50plus")
+```
+
+--------------------------------------------------------------------------------------------
+
+GRID LIMITS
+
+--------------------------------------------------------------------------------------------
+
+```{r}
+plotops_bggrid = list(
+  theme_light(), facet_grid(IOU~DER, scales="free_x", space='free_x', labeller=labeller(IOU=labsIOU, DER=labsDER)),
+  geom_boxplot(aes(fill=threshold), alpha=1, width=0.9), scale_fill_discrete_sequential(palette="Mint", nmax=13, order=1:13), 
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), legend.position="bottom"), guides(fill=guide_legend(nrow=1)), 
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)), 
+  labs(x="", y="Portion of households with access, by block group", fill="Access threshold (kW)")
+)
+
+plotops_allgrid = list(theme_light(), facet_grid(IOU~DER, labeller=labeller(IOU=labsIOU)),
+  geom_line(), geom_point(size=2), 
+  theme(legend.position="bottom", legend.margin=margin(), legend.text=element_text(size=8), axis.text.x=element_text(size=7)),
+  guides(shape=guide_legend(nrow=4,title.position="top")),
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)),
+  scale_x_continuous(breaks=c(0,as.numeric(at)), labels=c(">0", "1", "1.5","2","3","4","4.5","5","6","7","8","9","10")),
+  scale_color_discrete_sequential(palette="Viridis", nmax=5, order=5:2),
+  labs(x="Access threshold (kW)", y="Portion of households with access", color="Limit type")
+)
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"), 
+  # theme( axis.title=element_blank()),
+  geom_line(aes(y=value, color=feature),linewidth=0.75), geom_point(aes(y=value, color=feature),size=1),
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)),
+  scale_x_continuous(breaks=c(0,as.numeric(at)), labels=c(">0", "1", "1.5","2","3","4","4.5","5","6","7","8","9","10")),
+  scale_color_discrete_sequential(palette="Viridis", nmax=8, order=8:1),
+  labs(x="Access threshold (kW)", y="Portion of households with access", color="Housing size"))
+```
+
+ACCESS
+We calculate the number of households with access based on grid limits.
+
+```{r}
+SCE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
+PGE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
+
+for (t in 1:length(at)) { 
+  name <- paste0("hhwacc_",at[t],"_ICL_pct") 
+  
+  SCE_ICAaccess[[name]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, SCE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))
+  SCE_ICAaccess[[paste0("hhwacc_",at[t],"_ICL")]] <- SCE_ICAaccess[[name]]*SCE_ICAaccess$tothh_Cpoly
+  
+  PGE_ICAaccess[[name]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, PGE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))
+  PGE_ICAaccess[[paste0("hhwacc_",at[t],"_ICL")]] <- PGE_ICAaccess[[name]]*PGE_ICAaccess$tothh_Cpoly
+}
+```
+
+```{r} 
+###Computing number of households with access per block groups
+IOU_ICAaccess_grid <- 
+  rbind(select(PGE_ICAaccess, IOU, tothh_Cpoly, tothh_SU_Cpoly, tothh_duplex_Cpoly, tothh_3to4_Cpoly, tothh_5to9_Cpoly, tothh_10to19_Cpoly, tothh_20to49_Cpoly, tothh_50plus_Cpoly, GEOID, intersect(starts_with("hhwacc_"), ends_with("_pct"))),
+        select(SCE_ICAaccess, IOU, tothh_Cpoly, tothh_SU_Cpoly, tothh_duplex_Cpoly, tothh_3to4_Cpoly, tothh_5to9_Cpoly, tothh_10to19_Cpoly, tothh_20to49_Cpoly, tothh_50plus_Cpoly, GEOID, intersect(starts_with("hhwacc_"), ends_with("_pct")))) %>%
+  melt(id=c("IOU", "tothh_Cpoly", "GEOID", "tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")) %>%
+  mutate(hhwacc_Cpoly = value*tothh_Cpoly) %>%    # households per Cpoly, not percent
+  mutate(hhwacc_SU_Cpoly = value*tothh_SU_Cpoly) %>% 
+  mutate(hhwacc_duplex_Cpoly = value*tothh_duplex_Cpoly) %>% 
+  mutate(hhwacc_3to4_Cpoly = value*tothh_3to4_Cpoly) %>% 
+  mutate(hhwacc_5to9_Cpoly = value*tothh_5to9_Cpoly) %>% 
+  mutate(hhwacc_10to19_Cpoly = value*tothh_10to19_Cpoly) %>% 
+  mutate(hhwacc_20to49_Cpoly = value*tothh_20to49_Cpoly) %>% 
+  mutate(hhwacc_50plus_Cpoly = value*tothh_50plus_Cpoly) %>% 
+  group_by(IOU, GEOID, variable) %>%
+  summarise(avgacc_bg_pct = mean(value, na.rm=TRUE), # avg percent access in bg
+            tothh_bg = sum(tothh_Cpoly, na.rm=TRUE), # total number of households in block group
+            tothh_SU_bg = sum(tothh_SU_Cpoly, na.rm=TRUE),
+            tothh_duplex_bg = sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            tothh_3to4_bg = sum(tothh_3to4_Cpoly, na.rm=TRUE),
+            tothh_5to9_bg = sum(tothh_5to9_Cpoly, na.rm=TRUE),
+            tothh_10to19_bg = sum(tothh_10to19_Cpoly, na.rm=TRUE),
+            tothh_20to49_bg = sum(tothh_20to49_Cpoly, na.rm=TRUE),
+            tothh_50plus_bg = sum(tothh_50plus_Cpoly, na.rm=TRUE),
+            hhwacc_bg_pct = sum(hhwacc_Cpoly, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+            hhwacc_SU_bg_pct = sum(hhwacc_SU_Cpoly, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+            hhwacc_duplex_bg_pct = sum(hhwacc_duplex_Cpoly, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+            hhwacc_3to4_bg_pct = sum(hhwacc_3to4_Cpoly, na.rm=TRUE)/sum(tothh_3to4_Cpoly, na.rm=TRUE),
+            hhwacc_5to9_bg_pct = sum(hhwacc_5to9_Cpoly, na.rm=TRUE)/sum(tothh_5to9_Cpoly, na.rm=TRUE),
+            hhwacc_10to19_bg_pct = sum(hhwacc_10to19_Cpoly, na.rm=TRUE)/sum(tothh_10to19_Cpoly, na.rm=TRUE),
+            hhwacc_20to49_bg_pct = sum(hhwacc_20to49_Cpoly, na.rm=TRUE)/sum(tothh_20to49_Cpoly, na.rm=TRUE),
+            hhwacc_50plus_bg_pct = sum(hhwacc_50plus_Cpoly, na.rm=TRUE)/sum(tothh_50plus_Cpoly, na.rm=TRUE)
+            )%>%
+  mutate(variable = as.character(variable),
+         threshold = sapply(strsplit(variable, "_"), function(x) x[2]),
+         threshold = factor(ifelse(threshold=="0",">0",threshold), levels=c(">0",at)),
+         DER = factor(sapply(strsplit(variable, "_"), function(x) x[3]), levels=c("ICL")),
+         avgacc_bg_pct = as.numeric(avgacc_bg_pct))
+
+###Computing total number of households with access
+IOU_hhwacc_grid <- IOU_ICAaccess_grid %>%
+  mutate(hhwacc_bg = hhwacc_bg_pct*tothh_bg) %>%
+  mutate(hhwacc_SU_bg = hhwacc_SU_bg_pct*tothh_SU_bg) %>%
+  mutate(hhwacc_duplex_bg = hhwacc_duplex_bg_pct*tothh_duplex_bg) %>%
+  mutate(hhwacc_3to4_bg = hhwacc_3to4_bg_pct*tothh_3to4_bg) %>%
+  mutate(hhwacc_5to9_bg = hhwacc_5to9_bg_pct*tothh_5to9_bg) %>%
+  mutate(hhwacc_10to19_bg = hhwacc_10to19_bg_pct*tothh_10to19_bg) %>%
+  mutate(hhwacc_20to49_bg = hhwacc_20to49_bg_pct*tothh_20to49_bg) %>%
+  mutate(hhwacc_50plus_bg = hhwacc_50plus_bg_pct*tothh_50plus_bg) %>%
+  mutate(DER = recode(DER, 'ICL'="Load")) %>%
+  group_by(IOU, DER, threshold) %>%
+  summarise(tothh = sum(tothh_bg, na.rm=TRUE),
+            avgacc_pct = mean(avgacc_bg_pct, na.rm=TRUE),
+            hhwacc_pct = sum(hhwacc_bg, na.rm=TRUE)/sum(tothh_bg, na.rm=TRUE),
+            hhwacc_SU_pct = sum(hhwacc_SU_bg, na.rm=TRUE)/sum(tothh_SU_bg, na.rm=TRUE),
+            hhwacc_duplex_pct = sum(hhwacc_duplex_bg, na.rm=TRUE)/sum(tothh_duplex_bg, na.rm=TRUE),
+            hhwacc_3to4_pct = sum(hhwacc_3to4_bg, na.rm=TRUE)/sum(tothh_3to4_bg, na.rm=TRUE),
+            hhwacc_5to9_pct = sum(hhwacc_5to9_bg, na.rm=TRUE)/sum(tothh_5to9_bg, na.rm=TRUE),
+            hhwacc_10to19_pct = sum(hhwacc_10to19_bg, na.rm=TRUE)/sum(tothh_10to19_bg, na.rm=TRUE),
+            hhwacc_20to49_pct = sum(hhwacc_20to49_bg, na.rm=TRUE)/sum(tothh_20to49_bg, na.rm=TRUE),
+            hhwacc_50plus_pct = sum(hhwacc_50plus_bg, na.rm=TRUE)/sum(tothh_50plus_bg, na.rm=TRUE)) %>%
+  mutate(threshold = as.numeric(ifelse(as.character(threshold)==">0","0",as.character(threshold))))
+```
+
+Visualizing results...
+
+```{r}
+lf <- melt(IOU_hhwacc_grid, id=c("IOU", "DER", "threshold", "tothh", "avgacc_pct"))
+
+lf <- lf %>%
+  mutate(feature = recode(factor(variable, levels=c("hhwacc_pct","hhwacc_SU_pct","hhwacc_duplex_pct","hhwacc_3to4_pct","hhwacc_5to9_pct", "hhwacc_10to19_pct", "hhwacc_20to49_pct", "hhwacc_50plus_pct")), 
+                          'hhwacc_pct'="All", 'hhwacc_SU_pct'="Single Unit", 'hhwacc_duplex_pct'="Duplex", 
+                          'hhwacc_3to4_pct'="3-4 units", 'hhwacc_5to9_pct'="5-9 units", 'hhwacc_10to19_pct'="10-19 units", 'hhwacc_20to49_pct'="20-49 units", 'hhwacc_50plus_pct'="More than 50 units"))
+
+a <- ggplot(filter(lf), aes(x=threshold)) + plotops
+print(a)
+
+ggsave("figures/access/IOU_access_housing_size.png", a, width=8, height=5.5)
+```
+
+
+```{r}
+# For the box grid plot
+bg <- IOU_ICAaccess_grid %>% 
+  filter(!is.na(hhwacc_bg_pct)) %>% 
+  ggplot(aes(y=hhwacc_bg_pct)) + plotops_bggrid
+bg
+
+ggsave("figures/access/IOU_access_bg_ICL.png", bg, width=9.5, height=5.5)
+
+# For the line and point grid plot
+all <- IOU_hhwacc_grid %>% 
+  ggplot(aes(x=threshold, y=hhwacc_pct)) + plotops_allgrid
+all
+ggsave("figures/access/IOU_access_all_ICL.png", all, width=8.5, height=5.5)
+
+# Combine the plots
+plot_grid(all, bg, labels=c('a','b'), label_size=12, rel_widths=c(0.25,0.75), rel_heights=c(1,1))
+
+ggsave("figures/access/IOU_access_comb_ICL.png", width=12, height=6)
+```
+
+Printing statistics values of households access to use in tables
+
+```{r}
+accgr1 <- as.data.frame(IOU_hhwacc_grid) %>%
+  select(c("IOU","DER", "threshold", "hhwacc_pct")) %>%
+  filter((threshold==0.0 & DER=="Load") | threshold==1.5 | threshold==7.0 | threshold==10.0) %>%
+  mutate(DER = ifelse(DER=="Load", "ICL")) %>%
+  mutate(DER = paste0(DER," ",threshold)) %>% select(-c("threshold")) %>%
+  mutate(hhwacc_pct = round(hhwacc_pct*100, digits=0)) %>%
+  mutate(variable="full_territory")
+
+accgr1 <- dcast(accgr1, IOU+variable~DER, value.var="hhwacc_pct")
+
+  IOU_accessbg_grid_stats <- IOU_ICAaccess_grid %>%
+  filter(!is.na(hhwacc_bg_pct) & !is.na(threshold)) %>%
+  group_by(IOU, threshold) %>%
+  summarise(
+    median = median(hhwacc_bg_pct, na.rm = TRUE),
+    lower_quartile = quantile(hhwacc_bg_pct, 0.25, na.rm = TRUE),
+    upper_quartile = quantile(hhwacc_bg_pct, 0.75, na.rm = TRUE),
+    min = min(hhwacc_bg_pct, na.rm = TRUE),
+    max = max(hhwacc_bg_pct, na.rm = TRUE),
+    iqr = IQR(hhwacc_bg_pct, na.rm = TRUE),
+    lower_whisker = quantile(hhwacc_bg_pct, 0.25, na.rm = TRUE) - 1.5 * IQR(hhwacc_bg_pct, na.rm = TRUE),
+    upper_whisker = quantile(hhwacc_bg_pct, 0.75, na.rm = TRUE) + 1.5 * IQR(hhwacc_bg_pct, na.rm = TRUE),
+    .groups = "drop" # 
+  ) %>%
+  # Ensuring the whiskers don't go beyond the actual data points
+  mutate(
+    lower_whisker = pmax(lower_whisker, min, na.rm = TRUE),
+    upper_whisker = pmin(upper_whisker, max, na.rm = TRUE)
+  )
+
+
+accgr2 <- IOU_accessbg_grid_stats %>%
+  select(c("IOU","threshold", "median", "lower_quartile","upper_quartile")) %>%
+  dplyr::rename("25th pctl"="lower_quartile", "75th pctl"="upper_quartile") %>%
+  mutate(median = round(median*100, digits=0),
+    `25th pctl` = round(`25th pctl` * 100, digits = 0),
+    `75th pctl` = round(`75th pctl` * 100, digits = 0)) %>%
+  filter(threshold=='>0' | threshold=='1.5' | threshold=='7.0' | threshold=='10.') 
+
+accgr2 <- accgr2 %>%
+  pivot_longer(
+    cols = c(median, `25th pctl`, `75th pctl`),
+    names_to = "variable",
+    values_to = "value"
+  ) %>% pivot_wider(
+        names_from = threshold,
+        values_from = value,
+        names_prefix = "threshold_"
+    ) %>%
+    select(IOU, variable, `threshold_>0`, `threshold_1.5`, `threshold_7.0`, `threshold_10.`) %>%
+    arrange(IOU, variable) %>%
+  rename(
+    `ICL 0` = `threshold_>0`,
+    `ICL 1.5` = threshold_1.5,
+    `ICL 7` = threshold_7.0,
+    `ICL 10` = threshold_10.
+  )
+
+accgr <- rbind(accgr1, filter(accgr2, variable=="75th pctl"|variable=="median"|variable=="25th pctl"))
+
+accgr
+rm(accgr1,accgr2)
+```
+
+```{r}
+acchouse <- as.data.frame(IOU_hhwacc_grid) %>%
+  select(-c("DER", "tothh", "avgacc_pct")) %>%
+  filter((threshold==0.0) | threshold==1.5 | threshold==7.0 | threshold==10.0) %>%
+  mutate(across(contains("pct"), ~ round(. * 100, digits = 0))) %>%
+  dplyr::rename("All"='hhwacc_pct', "Single Unit"='hhwacc_SU_pct', "Duplex"='hhwacc_duplex_pct', 
+                          "3-4 units"='hhwacc_3to4_pct', "5-9 units"='hhwacc_5to9_pct', "10-19 units"='hhwacc_10to19_pct', "20-49 units"='hhwacc_20to49_pct', "More than 50 units"='hhwacc_50plus_pct')
+
+acchouse
+```
+
+```{r}
+acctothh <- IOU_ICAaccess_grid %>%
+    group_by(IOU, DER, threshold) %>%
+    summarise(tothh = sum(tothh_bg, na.rm=TRUE),
+              tothh_SU = sum(tothh_SU_bg, na.rm=TRUE),
+              tothh_duplex = sum(tothh_duplex_bg, na.rm=TRUE),
+              tothh_3to4 = sum(tothh_3to4_bg, na.rm=TRUE),
+              tothh_5to9 = sum(tothh_5to9_bg, na.rm=TRUE),
+              tothh_10to19 = sum(tothh_10to19_bg, na.rm=TRUE),
+              tothh_20to49 = sum(tothh_20to49_bg, na.rm=TRUE),
+              tothh_50plus = sum(tothh_50plus_bg, na.rm=TRUE))%>%
+              select(-c("threshold")) %>%
+              slice(1)%>%
+  dplyr::rename("All"='tothh', "Single Unit"='tothh_SU', "Duplex"='tothh_duplex', 
+                          "3-4 units"='tothh_3to4', "5-9 units"='tothh_5to9', "10-19 units"='tothh_10to19', "20-49 units"='tothh_20to49', "More than 50 units"='tothh_50plus')
+
+acctothh
+```

@@ -1,0 +1,154 @@
+---
+title: "05_access"
+output: html_notebook
+---
+
+This notebook calculates grid access for households in PG&E and SCE service territories
+
+VERSION N°3 - General calculations for household access
+
+```{r}
+library(tidyverse)
+library(tictoc)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(tidytext)
+library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
+library(readxl)
+library(colorspace)
+library(cowplot)
+```
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata/SCE')
+SCEtypes = read.csv("circuitfiles/SCE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+SCE_ICAaccess = read.csv("circuitfiles/SCE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(SCEtypes$x))
+
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata/PGE')
+PGEtypes = read.csv("circuitfiles/PGE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+PGE_ICAaccess = read.csv("circuitfiles/PGE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(PGEtypes$x))
+
+#Correcting some duplicates problem
+PGE_ICAaccess <- PGE_ICAaccess[!duplicated(PGE_ICAaccess[, c("GEOID", "CircuitName")]), ]
+
+at <- c("1", "1.5", "2.0", "3.0", "4.0", "4.5", "5.0", "6.0", "7.0", "8.0", "9.0", "10.")
+```
+
+```{r}
+labsIOU <- function(x) ifelse(x == "PGE", "PG&E", "SCE")
+labsDER <- function(x) ifelse(x == "ICL", "Load", NA)
+```
+
+--------------------------------------------------------------------------------------------
+
+GRID LIMITS
+
+--------------------------------------------------------------------------------------------
+
+```{r}
+plotops_bggrid = list(
+  theme_light(), facet_grid(IOU~DER, scales="free_x", space='free_x', labeller=labeller(IOU=labsIOU, DER=labsDER)),
+  geom_boxplot(aes(fill=threshold), alpha=1, width=0.9), scale_fill_discrete_sequential(palette="Mint", nmax=13, order=1:13), 
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), legend.position="bottom"), guides(fill=guide_legend(nrow=1)), 
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)), 
+  labs(x="", y="Portion of households with access, by block group", fill="Access threshold (kW)")
+)
+
+plotops_allgrid = list(theme_light(), facet_grid(IOU~DER, labeller=labeller(IOU=labsIOU)),
+  geom_line(), geom_point(size=2), 
+  theme(legend.position="bottom", legend.margin=margin(), legend.text=element_text(size=8), axis.text.x=element_text(size=7)),
+  guides(shape=guide_legend(nrow=4,title.position="top")),
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)),
+  scale_x_continuous(breaks=c(0,as.numeric(at)), labels=c(">0", "1", "1.5","2","3","4","4.5","5","6","7","8","9","10")),
+  scale_color_discrete_sequential(palette="Viridis", nmax=5, order=5:2),
+  labs(x="Access threshold (kW)", y="Portion of households with access", color="Limit type")
+)
+```
+
+Remaining only 
+
+For each DER type, we calculate the number of households with access based on grid limits, with "access" defined as all households having ability to host between 1.5 and 10 kW of PV.
+
+```{r}
+SCE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
+PGE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
+
+for (t in 1:length(at)) { 
+  name <- paste0("hhwacc_",at[t],"_ICL_pct") 
+  
+  SCE_ICAaccess[[name]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, SCE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))
+  SCE_ICAaccess[[paste0("hhwacc_",at[t],"_ICL")]] <- SCE_ICAaccess[[name]]*SCE_ICAaccess$tothh_Cpoly
+  
+  PGE_ICAaccess[[name]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, PGE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))
+  PGE_ICAaccess[[paste0("hhwacc_",at[t],"_ICL")]] <- PGE_ICAaccess[[name]]*PGE_ICAaccess$tothh_Cpoly
+}
+```
+
+Supplementary Figure S2
+Visualizing results... just grid limits
+
+```{r}
+IOU_ICAaccess_grid <- 
+  rbind(select(PGE_ICAaccess, IOU, tothh_Cpoly, GEOID, intersect(starts_with("hhwacc_"), ends_with("_pct"))),
+        select(SCE_ICAaccess, IOU, tothh_Cpoly, GEOID, intersect(starts_with("hhwacc_"), ends_with("_pct")))) %>%
+  melt(id=c("IOU", "tothh_Cpoly", "GEOID")) %>%
+  mutate(hhwacc_Cpoly = value*tothh_Cpoly) %>%    # households per Cpoly, not percent
+  group_by(IOU, GEOID, variable) %>%
+  summarise(avgacc_bg_pct = mean(value, na.rm=TRUE), # avg percent access in bg
+            tothh_bg = sum(tothh_Cpoly, na.rm=TRUE), # total number of households in block group
+            hhwacc_bg_pct = sum(hhwacc_Cpoly, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE))%>%
+  mutate(variable = as.character(variable),
+         threshold = sapply(strsplit(variable, "_"), function(x) x[2]), #change 3 to 2
+         threshold = factor(ifelse(threshold=="0",">0",threshold), levels=c(">0",at)),
+         # limit = sapply(strsplit(variable, "_"), function(x) x[2]),
+         DER = factor(sapply(strsplit(variable, "_"), function(x) x[3]), levels=c("ICL")),  #change 4 to 3
+         avgacc_bg_pct = as.numeric(avgacc_bg_pct))
+
+# For the box grid plot
+bg <- IOU_ICAaccess_grid %>% 
+  filter(!is.na(hhwacc_bg_pct)) %>% 
+  ggplot(aes(y=hhwacc_bg_pct)) + plotops_bggrid
+bg
+
+ggsave("figures/access/IOU_accessbg_ICL.png", width=8.5, height=6)
+#ggsave("figures/access/IOU_accessbg_ICL.pdf", width=8.5, height=6)
+
+IOU_accessbg_gr <- ggplot_build(bg)$data[[1]]
+
+IOU_hhwacc_grid <- IOU_ICAaccess_grid %>%
+  mutate(hhwacc_bg = hhwacc_bg_pct*tothh_bg) %>%
+  mutate(DER = recode(DER, 'ICL'="Load")) %>%
+  group_by(IOU, DER, threshold) %>%
+  summarise(tothh = sum(tothh_bg, na.rm=TRUE),
+            avgacc_pct = mean(avgacc_bg_pct, na.rm=TRUE),
+            hhwacc_pct = sum(hhwacc_bg, na.rm=TRUE)/sum(tothh_bg, na.rm=TRUE)) %>%
+  mutate(threshold = as.numeric(ifelse(as.character(threshold)==">0","0",as.character(threshold))))
+
+# For the line and point grid plot
+all <- IOU_hhwacc_grid %>% 
+  ggplot(aes(x=threshold, y=hhwacc_pct)) + plotops_allgrid
+all
+
+# Combine the plots
+plot_grid(all, bg, labels=c('a','b'), label_size=12, rel_widths=c(0.25,0.75), rel_heights=c(1,1))
+
+ggsave("figures/access/IOU_access_ICL.png", width=11.5, height=6)
+#ggsave("figures/access/IOU_access_ICL.pdf", width=11.5, height=6)
+```
+
+Merging back into main files
+
+# ```{r}
+# write.csv(SCE_ICAaccess, file = "circuitfiles/SCE_ICAaccess.csv", row.names=FALSE)
+# write.csv(SCE_ICAaccess_grid, file = "circuitfiles/SCE_ICAaccess_bg_grid.csv", row.names=FALSE)
+# write.csv(SCE_hhwacc_grid, file = "circuitfiles/SCE_ICAaccess_all_grid.csv", row.names=FALSE)
+# ```
+<!-- # -->
+# ```{r}
+# write.csv(PGE_ICAaccess, file = "circuitfiles/PGE_ICAaccess.csv", row.names=FALSE)
+# write.csv(PGE_ICAaccess_grid, file = "circuitfiles/PGE_ICAaccess_bg_grid.csv", row.names=FALSE)
+# write.csv(PGE_hhwacc_grid, file = "circuitfiles/PGE_ICAaccess_all_grid.csv", row.names=FALSE)
+# ```
+
+

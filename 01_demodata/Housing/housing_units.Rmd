@@ -1,0 +1,160 @@
+---
+title: "housing_units"
+author: "Louis Rosset"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+```
+----------------------------------------------------------------------------------
+#Historic of New Constructions of Single and Multiple units buildings
+----------------------------------------------------------------------------------
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/Housing')
+House_Units_2000_2010 <- read.csv("DOF_2000-2010_housing_units.csv",  header=T, na.strings="?", colClasses=c("integer", "character", rep("numeric",10), "character"))
+```
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/Housing')
+House_Units_2010_2023 <- read.csv("DOF_2010-2023_housing_units.csv",  header=T, na.strings="?", colClasses=c("integer", "character", rep("numeric",12), "character"))
+House_Units_2010_2023 <- House_Units_2010_2023 %>%
+  mutate(
+    Single = Single_Detached + Single_Attached,
+    Multiple = Two_to_Four + Five_Plus
+  )
+```
+
+```{r}
+House_Units <- cbind(House_Units_2000_2010[, c("Year", "Month", "Household", "Total_HousingUnits", "Single", "Multiple")])
+
+House_Units <- rbind(House_Units, House_Units_2010_2023[, c("Year", "Month", "Household", "Total_HousingUnits", "Single", "Multiple")])
+```
+
+
+```{r}
+New_Constructions_2010_2023 <- House_Units %>%
+  filter((Year == 2010 & Month == "April") | (Year == 2023 & Month == "January")) %>%
+  summarise(
+    Single = diff(Single),
+    Multiple = diff(Multiple)
+  ) %>%
+  gather(key = "Housing_Type", value = "2010-2023")
+
+New_Constructions_2000_2010 <- House_Units %>%
+  filter((Year == 2000 & Month == "April") | (Year == 2010 & Month == "January")) %>%
+  summarise(
+    Single = diff(Single),
+    Multiple = diff(Multiple)
+  ) %>%
+  gather(key = "Housing_Type", value = "2000-2010")
+
+New_Constructions <- New_Constructions_2000_2010 %>%
+  left_join(New_Constructions_2010_2023, by = "Housing_Type")
+
+New_Constructions_long <- New_Constructions %>%
+  gather(key = "Year", value = "Value", -Housing_Type)
+```
+
+```{r}
+#Calculation of proportion of 5+ units structure among 2010-2023 Multiple new constructions
+New_Constructions_FivePlus_10_23 = last(House_Units_2010_2023$Five_Plus) - first(House_Units_2010_2023$Five_Plus)
+Ratio_NC_5plus_10_23 <- New_Constructions_FivePlus_10_23 / 
+                        New_Constructions_2010_2023["2", "2010-2023"]
+print(Ratio_NC_5plus_10_23)
+```
+
+```{r}
+cat("Since 2010,",New_Constructions_2010_2023["2", "2010-2023"]  ,"new housing units constructed have been in multi-unit buildings. A ",Ratio_NC_5plus_10_23*100,"% of these have been in larger buildings consisting of at least five units.")
+```
+
+
+```{r}
+a <- ggplot(New_Constructions_long, aes(x = Year, y = Value, fill = Housing_Type)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.7) +
+  geom_text(aes(label = scales::comma(Value)), position = position_stack(vjust = 0.5), color = "white", size = 5) +
+  labs(
+    caption = "Note: Numbers are net additions to the state's total housing stock."
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_manual(values = c("Single" = "#9F4A54", "Multiple" = "#26547C")) +
+  theme_minimal(base_size = 15) + 
+  theme(
+    legend.title = element_blank(),
+    legend.text = element_text(size = 15), 
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top",
+    axis.text = element_text(size = 12),
+    plot.caption = element_text(size = 10)
+  ) +
+  xlab(NULL) +  
+  ylab(NULL)   
+
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/Housing')
+ggsave("New_housing_units_Cal.png", plot = a, width = 10, height = 6, dpi = 300)
+```
+
+
+----------------------------------------------------------------------------------
+#Type of occupied housing units
+----------------------------------------------------------------------------------
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/Housing')
+Type_Housing_2022 <- read.csv("ACS_2022_S2504_1YE_cleaned.csv",  header=T,  na.strings="?", colClasses=c("character",  "numeric", "numeric", "numeric"))
+
+Type_Housing_2022 <- Type_Housing_2022 %>%
+  rename(
+    Housing_Type = Label,
+    Total = Tot_Estimate,
+    Owned = OwnerOccupied_Estimate,
+    Rented = RenterOccupied_Estimate
+  )
+
+# Renaming row labels in the "Housing_Type" column
+Type_Housing_2022$Housing_Type <- recode(Type_Housing_2022$Housing_Type,
+  `1, detached` = "Single Family Detached",
+  `1, attached` = "Single Family Attached",
+  `2 apartments` = "2 Units",
+  `3 or 4 apartments` = "3-4 Units",
+  `5 to 9 apartments` = "5-9 Units",
+  `10 or more apartments` = "10+ Units",
+  `Mobile home or other type of housing` = "Mobile or Other"
+)
+```
+
+```{r}
+Type_Housing_2022 <- Type_Housing_2022 %>%
+  filter(!(Housing_Type %in% c("Occupied housing units", "Mobile or Other"))) %>%
+  mutate(Percentage_Owned = (Owned / Total) * 100,
+         Percentage_Rented = (Rented / Total) * 100)
+
+Type_Housing_2022$Housing_Type <- factor(Type_Housing_2022$Housing_Type, levels = c("Single Family Detached", "Single Family Attached", "2 Units", "3-4 Units", "5-9 Units", "10+ Units"))
+
+Type_Housing_2022_melted <- Type_Housing_2022 %>%
+  select(Housing_Type, Percentage_Owned, Percentage_Rented) %>%
+  gather(key = "Ownership", value = "Percentage", -Housing_Type)
+
+b <- ggplot(Type_Housing_2022_melted, aes(x = Housing_Type, y = Percentage, fill = Ownership)) +
+  geom_bar(stat = "identity", position = "stack", width = 0.7) +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), position = position_stack(vjust = 0.5), color = "white", size = 5) +
+  scale_fill_manual(values = c("Percentage_Owned" = "#9F4A54", "Percentage_Rented" = "#26547C"),
+                    labels = c("Owned", "Rented")) +
+  theme_minimal(base_size = 15) + 
+  theme(
+    legend.title = element_blank(),
+    legend.text = element_text(size = 15), 
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    legend.position = "top"
+  ) +
+  labs(
+    x = NULL,
+    y = NULL,
+    fill = NULL,
+  )
+
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/Housing')
+ggsave("Type_Housing_2022.png", plot = b, width = 10, height = 6, dpi = 300)
+```

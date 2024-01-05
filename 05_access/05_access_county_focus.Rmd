@@ -1,0 +1,331 @@
+---
+title: "05_access_county_focus"
+output: html_document
+---
+
+This notebook calculates and analyses grid access for households in specific counties.
+
+```{r}
+library(tidyverse)
+library(tictoc)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(tidytext)
+library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
+library(readxl)
+library(colorspace)
+library(cowplot)
+library(fANCOVA)
+library(gridExtra)
+
+get_legend<-function(myggplot){
+  tmp <- ggplot_gtable(ggplot_build(myggplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+```
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/Grid_limits_EV_charging/04_allocation/IOUdata')
+SCEtypes = read.csv("SCE/circuitfiles/SCE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+SCE_ICAaccess = read.csv("SCE/circuitfiles/SCE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(SCEtypes$x))
+
+PGEtypes = read.csv("PGE/circuitfiles/PGE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
+PGE_ICAaccess = read.csv("PGE/circuitfiles/PGE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(PGEtypes$x))
+
+at <- c("1", "1.5", "2.0", "3.0", "4.0", "4.5", "5.0", "6.0", "7.0", "8.0", "9.0", "10.")
+
+###EXTRA FEATURES FOR HOUSING###
+SCEhousingtypes <- read.csv("SCE/circuitfiles/SCE_ICAalldemo_housing_classes.csv", header = TRUE, na.strings = "?")
+SCE_ICA_housing <- read.csv("SCE/circuitfiles/SCE_ICAalldemoalloc_housing.csv", header = TRUE, na.strings = "?", colClasses = as.character(SCEhousingtypes$x))
+
+PGEhousingtypes <- read.csv("PGE/circuitfiles/PGE_ICAalldemo_housing_classes.csv", header = TRUE, na.strings = "?")
+PGE_ICA_housing <- read.csv("PGE/circuitfiles/PGE_ICAalldemoalloc_housing.csv", header = TRUE, na.strings = "?", colClasses = as.character(PGEhousingtypes$x))
+
+#Correcting some duplicates problem
+PGE_ICAaccess <- PGE_ICAaccess[!duplicated(PGE_ICAaccess[, c("GEOID", "CircuitName")]), ]
+PGE_ICA_housing <- PGE_ICA_housing[!duplicated(PGE_ICA_housing[, c("GEOID", "CircuitName")]), ]
+
+SCE_ICAaccess <- merge(SCE_ICAaccess, SCE_ICA_housing[, c("GEOID", "CircuitName", "tothh_Cpoly", "tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")], by = c("GEOID", "CircuitName", "tothh_Cpoly"))
+
+PGE_ICAaccess <- merge(PGE_ICAaccess, PGE_ICA_housing[, c("GEOID", "CircuitName", "tothh_Cpoly", "tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")], by = c("GEOID", "CircuitName", "tothh_Cpoly"))
+### ------------------------###
+```
+
+```{r}
+labsIOU <- function(x) ifelse(x == "PGE", "PG&E", "SCE")
+labsDER <- function(x) ifelse(x == "ICL", "Load", NA)
+housing <- c("SU", "duplex", "3to4", "5to9", "10to19", "20to49", "50plus")
+PGE_counties <- c("Alameda", "Amador", "Butte", "Calaveras", "Colusa", "Contra Costa",
+                  "El Dorado", "Fresno", "Glenn", "Humboldt", "Kern", "Kings",
+                  "Lake", "Marin", "Mariposa", "Mendocino", "Merced", "Monterey",
+                  "Napa", "Nevada", "Placer", "Plumas", "Sacramento", "San Benito",
+                  "San Francisco", "San Joaquin", "San Luis Obispo", "San Mateo",
+                  "Santa Barbara", "Santa Clara", "Santa Cruz", "Shasta", "Sierra",
+                  "Solano", "Sonoma", "Stanislaus", "Sutter", "Tehama", "Tulare",
+                  "Tuolumne", "Yolo", "Yuba")
+SCE_counties <- c("Inyo", "Kern", "Kings", "Los Angeles", "Mono", "Orange", 
+                  "Riverside", "San Bernardino", "Santa Barbara", "Tulare", "Ventura")
+```
+
+```{r}
+plotops <- list(theme_light(), facet_grid(.~county, scales="fixed"), 
+  # theme(legend.position="none", axis.title=element_blank()),
+  geom_line(aes(y=value, color=feature),linewidth=0.75), geom_point(aes(y=value, color=feature),size=1),
+  scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)),
+  scale_x_continuous(breaks=c(0,as.numeric(at)), labels=c(">0", "1", "1.5","2","3","4","4.5","5","6","7","8","9","10")),
+  scale_color_discrete_sequential(palette="Viridis", nmax=8, order=8:1),
+  labs(x="Access threshold (kW)", y="Portion of households with access", color="Household size"))
+```
+
+--------------------------------------------------------------------------------------------
+
+GRID LIMITS BY COUNTY - Housing distribution 
+
+--------------------------------------------------------------------------------------------
+ACCESS
+We calculate the number of households with access based on grid limits.
+
+```{r}
+SCE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
+PGE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
+
+for (t in 1:length(at)) { 
+  name <- paste0("hhwacc_",at[t],"_ICL_pct") 
+  
+  SCE_ICAaccess[[name]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, SCE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))
+  SCE_ICAaccess[[paste0("hhwacc_",at[t],"_ICL")]] <- SCE_ICAaccess[[name]]*SCE_ICAaccess$tothh_Cpoly
+  
+  PGE_ICAaccess[[name]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, PGE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))
+  PGE_ICAaccess[[paste0("hhwacc_",at[t],"_ICL")]] <- PGE_ICAaccess[[name]]*PGE_ICAaccess$tothh_Cpoly
+}
+```
+
+```{r} 
+###Computing number of households with access per block groups
+IOU_ICAaccess_grid <- 
+  rbind(select(PGE_ICAaccess, IOU, tothh_Cpoly, tothh_SU_Cpoly, tothh_duplex_Cpoly, tothh_3to4_Cpoly, tothh_5to9_Cpoly, tothh_10to19_Cpoly, tothh_20to49_Cpoly, tothh_50plus_Cpoly, county, intersect(starts_with("hhwacc_"), ends_with("_pct"))),
+        select(SCE_ICAaccess, IOU, tothh_Cpoly, tothh_SU_Cpoly, tothh_duplex_Cpoly, tothh_3to4_Cpoly, tothh_5to9_Cpoly, tothh_10to19_Cpoly, tothh_20to49_Cpoly, tothh_50plus_Cpoly, county, intersect(starts_with("hhwacc_"), ends_with("_pct")))) %>%
+  melt(id=c("IOU", "tothh_Cpoly", "county", "tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")) %>%
+  filter(!(county == "Alpine"),
+           !(county == "Fresno" & IOU == "SCE"),
+           !(county == "Inyo" & IOU == "PGE"),
+           !(county == "Mariposa" & IOU == "SCE"),
+           !(county == "Mono" & IOU == "PGE"),
+           !(county == "Tuolumne" & IOU == "SCE"),
+           !(county == "Ventura" & IOU == "PGE"),
+           !(county == "Imperial"),
+           !(county == "Lassen"),
+           !(county == "Madera"),
+           !(county == "San Diego"),
+           !(county == "Siskiyou"),
+           !(county == "Trinity"))
+
+IOU_ICAaccess_grid <- IOU_ICAaccess_grid %>%
+  mutate(hhwacc_Cpoly = value*tothh_Cpoly) %>%    # households per Cpoly, not percent
+  mutate(hhwacc_SU_Cpoly = value*tothh_SU_Cpoly) %>% 
+  mutate(hhwacc_duplex_Cpoly = value*tothh_duplex_Cpoly) %>% 
+  mutate(hhwacc_3to4_Cpoly = value*tothh_3to4_Cpoly) %>% 
+  mutate(hhwacc_5to9_Cpoly = value*tothh_5to9_Cpoly) %>% 
+  mutate(hhwacc_10to19_Cpoly = value*tothh_10to19_Cpoly) %>% 
+  mutate(hhwacc_20to49_Cpoly = value*tothh_20to49_Cpoly) %>% 
+  mutate(hhwacc_50plus_Cpoly = value*tothh_50plus_Cpoly) %>% 
+  group_by(IOU, county, variable) %>%
+  summarise(avgacc_cty_pct = mean(value, na.rm=TRUE), # avg percent access in county
+              tothh_cty = sum(tothh_Cpoly, na.rm=TRUE), # total number of households in county
+              tothh_SU_cty = sum(tothh_SU_Cpoly, na.rm=TRUE),
+              tothh_duplex_cty = sum(tothh_duplex_Cpoly, na.rm=TRUE),
+              tothh_3to4_cty = sum(tothh_3to4_Cpoly, na.rm=TRUE),
+              tothh_5to9_cty = sum(tothh_5to9_Cpoly, na.rm=TRUE),
+              tothh_10to19_cty = sum(tothh_10to19_Cpoly, na.rm=TRUE),
+              tothh_20to49_cty = sum(tothh_20to49_Cpoly, na.rm=TRUE),
+              tothh_50plus_cty = sum(tothh_50plus_Cpoly, na.rm=TRUE),
+              hhwacc_cty_pct = sum(hhwacc_Cpoly, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
+              hhwacc_SU_cty_pct = sum(hhwacc_SU_Cpoly, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
+              hhwacc_duplex_cty_pct = sum(hhwacc_duplex_Cpoly, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
+              hhwacc_3to4_cty_pct = sum(hhwacc_3to4_Cpoly, na.rm=TRUE)/sum(tothh_3to4_Cpoly, na.rm=TRUE),
+              hhwacc_5to9_cty_pct = sum(hhwacc_5to9_Cpoly, na.rm=TRUE)/sum(tothh_5to9_Cpoly, na.rm=TRUE),
+              hhwacc_10to19_cty_pct = sum(hhwacc_10to19_Cpoly, na.rm=TRUE)/sum(tothh_10to19_Cpoly, na.rm=TRUE),
+              hhwacc_20to49_cty_pct = sum(hhwacc_20to49_Cpoly, na.rm=TRUE)/sum(tothh_20to49_Cpoly, na.rm=TRUE),
+              hhwacc_50plus_cty_pct = sum(hhwacc_50plus_Cpoly, na.rm=TRUE)/sum(tothh_50plus_Cpoly, na.rm=TRUE)
+              ) %>%
+  mutate(variable = as.character(variable),
+         threshold = sapply(strsplit(variable, "_"), function(x) x[2]),
+         threshold = factor(ifelse(threshold=="0",">0",threshold), levels=c(">0",at)),
+         DER = factor(sapply(strsplit(variable, "_"), function(x) x[3]), levels=c("ICL")),
+         avgacc_cty_pct = as.numeric(avgacc_cty_pct)) %>%
+  mutate(threshold = as.numeric(ifelse(as.character(threshold)==">0","0",as.character(threshold))))
+```
+
+Visualizing results...
+
+```{r}
+lf <- select(IOU_ICAaccess_grid, IOU, DER, county, threshold, tothh_cty, avgacc_cty_pct, tothh_SU_cty, tothh_duplex_cty, tothh_3to4_cty, tothh_5to9_cty, tothh_10to19_cty, tothh_20to49_cty, tothh_50plus_cty, intersect(starts_with("hhwacc_"), ends_with("_pct")))
+lf <- melt(lf, id=c("IOU", "DER", "county", "threshold", "tothh_cty", "tothh_SU_cty", "tothh_duplex_cty", "tothh_3to4_cty", "tothh_5to9_cty", "tothh_10to19_cty", "tothh_20to49_cty", "tothh_50plus_cty", "avgacc_cty_pct")) %>%
+  mutate(feature = recode(factor(variable, levels=c("hhwacc_cty_pct","hhwacc_SU_cty_pct","hhwacc_duplex_cty_pct","hhwacc_3to4_cty_pct","hhwacc_5to9_cty_pct", "hhwacc_10to19_cty_pct", "hhwacc_20to49_cty_pct", "hhwacc_50plus_cty_pct")), 
+                          'hhwacc_cty_pct'="All", 'hhwacc_SU_cty_pct'="Single Unit", 'hhwacc_duplex_cty_pct'="Duplex", 
+                          'hhwacc_3to4_cty_pct'="3-4 units", 'hhwacc_5to9_cty_pct'="5-9 units", 'hhwacc_10to19_cty_pct'="10-19 units", 'hhwacc_20to49_cty_pct'="20-49 units", 'hhwacc_50plus_cty_pct'="More than 50 units"))
+```
+
+--------------------------------------------------------------------------------------------
+
+GRID LIMITS BY COUNTY - Most populated counties (Top 3 SCE and PG&E)
+
+--------------------------------------------------------------------------------------------
+
+```{r}
+#ALAMEDA COUNTY - PG&E - 5TH RANKING OF HH
+lf_a <- lf %>% 
+  filter(county == "Alameda")
+
+a <- ggplot(filter(lf_a), aes(x=threshold)) + plotops
+print(a)
+
+# ggsave("figures/access/IOU_access_households_size.png", a, width=8, height=5.5)
+```
+
+```{r}
+#SAN FRANCISCO COUNTY - PG&E - 8TH RANKING OF HH
+lf_b <- lf %>% 
+  filter(county == "San Francisco")
+
+b <- ggplot(filter(lf_b), aes(x=threshold)) + plotops
+print(b)
+
+# ggsave("figures/access/IOU_access_households_size.png", a, width=8, height=5.5)
+```
+
+```{r}
+#SANTA CLARA COUNTY - PGE - 6TH RANKING OF HH
+lf_c <- lf %>% 
+  filter(county == "Santa Clara")
+
+c <- ggplot(filter(lf_c), aes(x=threshold)) + plotops
+print(c)
+
+# ggsave("figures/access/IOU_access_households_size.png", a, width=8, height=5.5)
+```
+
+```{r}
+#LOS ANGELES COUNTY - SCE - 1ST RANKING OF HH
+lf_d <- lf %>% 
+  filter(county == "Los Angeles")
+
+d <- ggplot(filter(lf_d), aes(x=threshold)) + plotops
+print(d)
+
+# ggsave("figures/access/IOU_access_households_size.png", a, width=8, height=5.5)
+```
+
+```{r}
+#ORANGE COUNTY - SCE - 2ND RANKING OF HH
+lf_e <- lf %>% 
+  filter(county == "Orange")
+
+e <- ggplot(filter(lf_e), aes(x=threshold)) + plotops
+print(e)
+
+# ggsave("figures/access/IOU_access_households_size.png", a, width=8, height=5.5)
+```
+
+```{r}
+#SAN BERNARDINO COUNTY - SCE - 3RD RANKING OF HH
+lf_f <- lf %>% 
+  filter(county == "San Bernardino")
+
+f1 <- ggplot(filter(lf_f), aes(x=threshold)) + plotops
+print(f1)
+
+# ggsave("figures/access/IOU_access_households_size.png", a, width=8, height=5.5)
+```
+
+```{r}
+#PLOTTING MOST POPULATED COUNTIES
+nolegend_theme <- function(plot) {
+  plot + theme(legend.position = "none", 
+               axis.title = element_blank(),
+               axis.text = element_text(size = 6))
+}
+plot_list <- lapply(list(a, b, c, d, e, f1), nolegend_theme)
+
+# Format and exctract the legend
+legend_style <- function(plot) {
+  plot + theme(legend.position = "bottom", 
+               legend.box = "horizontal", 
+               legend.key.width = unit(1, "cm")) +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE))
+}
+leg <- get_legend(legend_style(plot_list[[1]]))
+
+# Arrange all plots and the legend
+g1 <- arrangeGrob(grobs = c(plot_list, list(leg)), 
+                  ncol = 3, nrow = 3, 
+                  widths = c(3, 3, 3), 
+                  heights = c(3, 3, 0.8))
+
+ggsave("figures/access/Access_housing_most_populated_counties.png", g1, width = 8, height = 6.5)
+```
+
+--------------------------------------------------------------------------------------------
+
+GRID LIMITS BY COUNTY - Plotting all
+
+--------------------------------------------------------------------------------------------
+
+```{r}
+#PLOTTING ALL PG&E COUNTIES
+Plots_PGE <- list()
+for (county_name in PGE_counties) {
+  # Filter the data for the current county
+  lf_f <- lf %>% 
+    filter(county == county_name, IOU == "PGE")
+  
+  # Create the plot
+  f <- ggplot(filter(lf_f), aes(x = threshold)) + plotops
+  Plots_PGE[[county_name]] <- f
+  
+  ggsave(paste0("figures/access/counties_housing/PGE/plot_", county_name, "_PGE.png"), f)
+}
+
+Plots_PGE <- lapply(Plots_PGE, nolegend_theme)
+leg <- get_legend(legend_style(Plots_PGE[[1]]))
+
+# Arrange all plots and the legend
+g2 <- arrangeGrob(grobs = c(Plots_PGE, list(leg)), 
+                  ncol = 7, 
+                  nrow = 7, 
+                  widths = rep(1, 7),  # Equal widths for each column
+                  heights = c(rep(3, 6), 0.8))
+
+ggsave("figures/access/counties_housing/PGE/plot_all_PGE.png", g2, width = 15, height = 12)
+```
+
+```{r}
+#PLOTTING ALL SCE COUNTIES
+Plots_SCE <- list()
+for (county_name in SCE_counties) {
+  # Filter the data for the current county
+  lf_f <- lf %>% 
+    filter(county == county_name, IOU == "SCE")
+  
+  # Create the plot
+  f <- ggplot(filter(lf_f), aes(x = threshold)) + plotops
+  Plots_SCE[[county_name]] <- f
+  
+  ggsave(paste0("figures/access/counties_housing/SCE/plot_", county_name, "_SCE.png"), f)
+}
+
+Plots_SCE <- lapply(Plots_SCE, nolegend_theme)
+leg <- get_legend(legend_style(Plots_SCE[[1]]))
+
+# Arrange all plots and the legend
+g3 <- arrangeGrob(grobs = c(Plots_SCE, list(leg)), 
+                  ncol = 3,
+                  nrow = 5,
+                  widths = rep(1, 3),  # Equal widths for each column
+                  heights = c(rep(3, 4), 0.8))
+
+ggsave("figures/access/counties_housing/SCE/plot_all_SCE.png", g3, width = 18, height = 12)
+```

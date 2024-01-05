@@ -1,0 +1,722 @@
+---
+title: "Access_MUD"
+author: "Louis Rosset"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(gridExtra)
+library(kableExtra)
+library(cowplot)
+library(tidyr)
+```
+
+```{r}
+#Extract SCE and PG&E ICA access data
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata/SCE')
+
+SCEtypes <- read.csv("circuitfiles/SCE_ICAalldemoallocclasses.csv", header = TRUE, na.strings = "?")
+SCE_ICAaccess <- read.csv("circuitfiles/SCE_ICAalldemoalloc.csv", header = TRUE, na.strings = "?", colClasses = as.character(SCEtypes$x))
+
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata/PGE')
+
+PGEtypes <- read.csv("circuitfiles/PGE_ICAalldemoallocclasses.csv", header = TRUE, na.strings = "?")
+PGE_ICAaccess <- read.csv("circuitfiles/PGE_ICAalldemoalloc.csv", header = TRUE, na.strings = "?", colClasses = as.character(PGEtypes$x))
+```
+
+
+```{r}
+# B25024 - UNITS IN STRUCTURE, including number of structures
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/Aggregate_Data_updated')
+
+ACS_2021_bg_units = read.csv("blockgroup/ACS_21_5YR_B25024_with_ann.csv", header=T, sep = ";", skip=1, na.strings="null", colClasses=c("factor", "factor", "character",rep("character",22)))
+colnames(ACS_2021_bg_units) <- c("GEOid_bg", "GEOID10", "bgcountystate", "totstr", "totstr_err", "units1det", "units1det_err", "units1att", "units1att_err", "units2", "units2_err", "units3to4", "units3to4_err", "units5to9", "units5to9_err", "units10to19", "units10to19_err", "units20to49", "units20to49_err", "units50plus", "units50plus_err", "mobilehome", "mobilehome_err", "boatrvvan", "boatrvvan_err")
+# Convert the last 22 columns to numeric and remove double quotes
+ACS_2021_bg_units <- ACS_2021_bg_units %>%
+  mutate_at(vars(tail(names(.), 22)), ~as.numeric(gsub('"', '', .)))
+# creating some new summary columns
+ACS_2021_bg_units <- ACS_2021_bg_units %>%
+  mutate(singleunit = units1att + units1det,
+         duplex = units2,
+         smallmulti = units3to4 + units5to9 + units10to19,
+         largemulti = units20to49 + units50plus,
+         totstr_wout_extra = totstr - mobilehome - boatrvvan) %>%
+  mutate(singleunit_pct = singleunit / totstr,
+         duplex_pct = duplex / totstr,
+         smallmulti_pct = smallmulti / totstr,
+         largemulti_pct = largemulti / totstr,
+         units3to4_pct = units3to4 / totstr,
+         units5to9_pct = units5to9 / totstr,
+         units10to19_pct = units10to19 / totstr,
+         units20to49_pct = units20to49 / totstr,
+         units50plus_pct = units50plus / totstr
+         ) %>%
+  mutate(unitsavg = (singleunit*1 + duplex*2 + units3to4*3.5 + units5to9*7 + units10to19*14.5 + units20to49*34.5 + units50plus*50) / totstr)
+```
+
+------------------------------------------------------------------------
+
+GRID LIMITS - HOSTING CAPACITY LOAD PER STRUCTURE AND PROPORTION OF MUDS
+
+------------------------------------------------------------------------
+```{r}
+#PG&E ACCESS
+PGE_ICAaccess <- merge(PGE_ICAaccess, ACS_2021_bg_units[, c("GEOID10", "singleunit", "duplex", "units3to4", "units5to9", "units10to19", "units20to49", "units50plus", "smallmulti", "largemulti", "duplex_pct", "smallmulti_pct", "largemulti_pct", "units3to4_pct", "units5to9_pct", "units10to19_pct", "units20to49_pct", "units50plus_pct")], by = "GEOID10")
+
+PGE_ICAaccess_filtered <- PGE_ICAaccess[, c("CircuitName", "GEOID", "county", "nearbycity", "PGEarea_Wt", "CpolyA_Wt", "tothh", "tothh_Cpoly", "totpop", "totpop_Cpoly", "totstr", "totstr_pct", "totstr_Cpoly", "ICL_kWphh", "ICL_e_kWphh_cap", "ICL_max", "ICL_max_ctot", "unitsavg", "singleunit", "duplex", "units3to4", "units5to9", "units10to19", "units20to49", "units50plus", "smallmulti", "largemulti", "singleunit_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct", "units3to4_pct", "units5to9_pct", "units10to19_pct", "units20to49_pct", "units50plus_pct")]
+
+PGE_ICAaccess_filtered <- PGE_ICAaccess_filtered %>%
+  mutate(ICL_max_strWt = ICL_max * totstr_pct) %>%
+  mutate(normstr_ICL = ICL_max_strWt/ICL_max_ctot) %>%
+  mutate(normstr_ICL = ifelse((is.na(normstr_ICL)|is.infinite(normstr_ICL)|normstr_ICL==0), 1, normstr_ICL))%>%
+  mutate(ICL_max_strWt_n = ICL_max_strWt/normstr_ICL)%>%
+  mutate(ICL_max_strWt_nadj = ifelse(abs(ICL_max_strWt_n)<abs(ICL_max), ICL_max_strWt_n, ICL_max))%>%
+  mutate(ICL_kWstr = ICL_max_strWt_nadj / totstr_Cpoly)%>%
+  mutate(MUD_pct = duplex_pct + smallmulti_pct + largemulti_pct)
+
+PGE_ICAaccess_filtered <- PGE_ICAaccess_filtered %>%
+  mutate(tothh_SU_Cpoly = singleunit_pct*tothh_Cpoly) %>%
+  mutate(tothh_duplex_Cpoly = duplex_pct*tothh_Cpoly) %>%
+  mutate(tothh_3to4_Cpoly = units3to4_pct*tothh_Cpoly) %>%
+  mutate(tothh_5to9_Cpoly = units5to9_pct*tothh_Cpoly) %>%
+  mutate(tothh_10to19_Cpoly = units10to19_pct*tothh_Cpoly) %>%
+  mutate(tothh_20to49_Cpoly = units20to49_pct*tothh_Cpoly) %>%
+  mutate(tothh_50plus_Cpoly = units50plus_pct*tothh_Cpoly)
+```
+
+```{r}
+#SCE ACCESS
+SCE_ICAaccess <- merge(SCE_ICAaccess, ACS_2021_bg_units[, c("GEOID10", "singleunit", "duplex", "units3to4", "units5to9", "units10to19", "units20to49", "units50plus", "smallmulti", "largemulti", "duplex_pct", "smallmulti_pct", "largemulti_pct", "units3to4_pct", "units5to9_pct", "units10to19_pct", "units20to49_pct", "units50plus_pct")], by.x = "GEOID", by.y = "GEOID10")
+
+SCE_ICAaccess_filtered <- SCE_ICAaccess[, c("CircuitName", "GEOID", "county", "nearbycity", "SCEarea_Wt", "CpolyA_Wt", "tothh", "tothh_Cpoly", "totpop", "totpop_Cpoly", "totstr", "totstr_pct", "totstr_Cpoly", "ICL_kWphh", "ICL_e_kWphh_cap", "ICL_max", "ICL_max_ctot", "unitsavg", "singleunit", "duplex", "units3to4", "units5to9", "units10to19", "units20to49", "units50plus", "smallmulti", "largemulti", "singleunit_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct", "units3to4_pct", "units5to9_pct", "units10to19_pct", "units20to49_pct", "units50plus_pct")]
+
+SCE_ICAaccess_filtered <- SCE_ICAaccess_filtered %>%
+  mutate(ICL_max_strWt = ICL_max * totstr_pct) %>%
+  mutate(normstr_ICL = ICL_max_strWt/ICL_max_ctot) %>%
+  mutate(normstr_ICL = ifelse((is.na(normstr_ICL)|is.infinite(normstr_ICL)|normstr_ICL==0), 1, normstr_ICL))%>%
+  mutate(ICL_max_strWt_n = ICL_max_strWt/normstr_ICL)%>%
+  mutate(ICL_max_strWt_nadj = ifelse(abs(ICL_max_strWt_n)<abs(ICL_max), ICL_max_strWt_n, ICL_max))%>%
+  mutate(ICL_kWstr = ICL_max_strWt_nadj / totstr_Cpoly)%>%
+  mutate(MUD_pct = duplex_pct + smallmulti_pct + largemulti_pct)
+
+SCE_ICAaccess_filtered <- SCE_ICAaccess_filtered %>%
+  mutate(tothh_SU_Cpoly = singleunit_pct*tothh_Cpoly) %>%
+  mutate(tothh_duplex_Cpoly = duplex_pct*tothh_Cpoly) %>%
+  mutate(tothh_3to4_Cpoly = units3to4_pct*tothh_Cpoly) %>%
+  mutate(tothh_5to9_Cpoly = units5to9_pct*tothh_Cpoly) %>%
+  mutate(tothh_10to19_Cpoly = units10to19_pct*tothh_Cpoly) %>%
+  mutate(tothh_20to49_Cpoly = units20to49_pct*tothh_Cpoly) %>%
+  mutate(tothh_50plus_Cpoly = units50plus_pct*tothh_Cpoly)
+```
+
+```{r}
+setwd('C:/Users/Louis Rosset/Documents/EPFL/Master Project/QGIS_data/04_allocation/IOUdata')
+write.csv(SCE_ICAaccess_filtered, file = "SCE/circuitfiles/SCE_ICAalldemoalloc_housing.csv", row.names = FALSE)
+write.csv(PGE_ICAaccess_filtered, file = "PGE/circuitfiles/PGE_ICAalldemoalloc_housing.csv", row.names = FALSE)
+
+SCEtypes <- sapply(SCE_ICAaccess_filtered,class)
+PGEtypes <- sapply(PGE_ICAaccess_filtered,class)
+
+write.csv(SCEtypes, file = "SCE/circuitfiles/SCE_ICAalldemo_housing_classes.csv", row.names=FALSE)
+write.csv(PGEtypes, file = "PGE/circuitfiles/PGE_ICAalldemo_housing_classes.csv", row.names=FALSE)
+```
+
+```{r}
+create_plot <- function(df, title) {
+  household_type <- c("tothh_SU_Cpoly", "tothh_duplex_Cpoly", "tothh_3to4_Cpoly", "tothh_5to9_Cpoly", 
+                      "tothh_10to19_Cpoly", "tothh_20to49_Cpoly", "tothh_50plus_Cpoly")
+  
+  calculate_proportions <- function(df, threshold) {
+    df %>%
+      group_by(household_type) %>%
+      summarise(proportion = sum(ifelse(ICL_e_kWphh_cap > threshold & !is.na(tothh_value), tothh_value, 0), na.rm = TRUE) / sum(tothh_value, na.rm = TRUE)*100)
+  }
+  
+  thresholds <- c(0, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10)
+  
+  df_long <- df %>%
+    select(matches("tothh_\\w+_Cpoly"), ICL_e_kWphh_cap) %>%
+    pivot_longer(cols = -ICL_e_kWphh_cap, names_to = "household_type", values_to = "tothh_value")
+  
+  results <- lapply(thresholds, function(x) calculate_proportions(df_long, x)) %>% 
+    bind_rows(.id = "threshold_id") %>%
+    mutate(threshold = thresholds[as.numeric(threshold_id)])
+  
+  results$household_type <- factor(results$household_type, levels = household_type)
+  
+  # Créer le plot
+  p <- ggplot(results, aes(x = threshold, y = proportion, color = household_type)) +
+    geom_line(linewidth = 0.8) + 
+    scale_color_manual(values = c("red", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "black"),
+          labels = c("Single Unit", "Duplex", "3 to 4 units", "5 to 9 units", "10 to 19 units", "20 to 49 units", "More than 50")) +
+    labs(title = title, 
+         x = "Threshold [kW]", y = "Proportion [%]", color = "Household Type") +
+    theme_minimal() +
+    scale_x_continuous(breaks = thresholds) +
+    scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, by = 10))
+  
+  return(list(plot = p, results_data = results))
+}
+
+output_PGE <- create_plot(PGE_ICAaccess_filtered, "PG&E")
+output_SCE <- create_plot(SCE_ICAaccess_filtered, "SCE")
+
+# You can access the plot and the results data frame separately from the list
+plot_PGE <- output_PGE$plot
+results_PGE <- output_PGE$results_data
+
+plot_SCE <- output_SCE$plot
+results_SCE <- output_SCE$results_data
+
+plot_PGE <- plot_PGE + theme(legend.position = "none")
+plot_SCE <- plot_SCE + theme(legend.position = "none")
+
+combined_plots <- plot_grid(plot_PGE, plot_SCE, ncol = 2, rel_widths = c(1, 1), labels = "AUTO")
+legend_plot <- get_legend(plot_SCE + theme(legend.position = "bottom"))
+combined_plots <- combined_plots + ggtitle("Household Access Considering the Type of Household")
+final_plot <- plot_grid(combined_plots, legend_plot, ncol = 1, rel_heights = c(1, 0.1))
+print(final_plot)
+
+ggsave("figures/access/plot_access_type_hh.png", final_plot, width = 12, height = 6)
+```
+
+
+------------------------------------------------------------------------
+
+GRID LIMITS - PLOTS 
+
+------------------------------------------------------------------------
+```{r}
+# Create a vector of capacity thresholds
+capacity_thresholds <- c(0, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10)
+
+# Initialize an empty vector to store proportions for PGE and SCE
+proportions_pge <- numeric(length(capacity_thresholds))
+proportions_sce <- numeric(length(capacity_thresholds))
+
+# Calculate the proportion of households with access for each threshold for PGE
+for (i in 1:length(capacity_thresholds)) {
+  threshold <- capacity_thresholds[i]
+  households_with_access <- sum(PGE_ICAaccess_filtered$totstr_Cpoly[PGE_ICAaccess_filtered$ICL_kWstr > threshold], na.rm = TRUE)
+  proportions_pge[i] <- households_with_access / sum(PGE_ICAaccess_filtered$totstr_Cpoly, na.rm = TRUE) * 100
+}
+
+# Calculate the proportion of households with access for each threshold for SCE
+for (i in 1:length(capacity_thresholds)) {
+  threshold <- capacity_thresholds[i]
+  households_with_access <- sum(SCE_ICAaccess_filtered$totstr_Cpoly[SCE_ICAaccess_filtered$ICL_kWstr > threshold], na.rm = TRUE)
+  proportions_sce[i] <- households_with_access / sum(SCE_ICAaccess_filtered$totstr_Cpoly, na.rm = TRUE) * 100
+}
+
+# Create a data frame for the results for PGE
+access_summary_pge <- data.frame(Capacity_Threshold = capacity_thresholds, Proportion = proportions_pge)
+
+# Create a data frame for the results for SCE
+access_summary_sce <- data.frame(Capacity_Threshold = capacity_thresholds, Proportion = proportions_sce)
+
+# Create the plot for PGE
+plot_pge <- ggplot(access_summary_pge, aes(x = Capacity_Threshold, y = Proportion)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(title = "PGE",
+       x = "Access Threshold [kW]",
+       y = "Proportion of Structures with Access [%]") +
+  scale_x_continuous(breaks = capacity_thresholds, 
+                     labels = c(">0", "1", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), 
+                     limits = c(0, 100), 
+                     breaks = c(0, 20, 40, 60, 80, 100))
+
+# Create the plot for SCE
+plot_sce <- ggplot(access_summary_sce, aes(x = Capacity_Threshold, y = Proportion)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(title = "SCE",
+       x = "Access Threshold (kW)",
+       y = "Proportion of Structures with Access (%)") +
+  scale_x_continuous(breaks = capacity_thresholds, 
+                     labels = c(">0", "1", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), 
+                     limits = c(0, 100), 
+                     breaks = c(0, 20, 40, 60, 80, 100))
+
+# Create a single figure with plots for PGE and SCE side by side
+combined_plot <- grid.arrange(plot_pge, plot_sce, ncol = 2)
+
+# Save the combined plot as an image file (e.g., PNG) with appropriate dimensions
+# Replace 'plot_output.png' with your desired file name and format
+ggsave("figures/access/plot_IOU__str_access.png", combined_plot, width = 12, height = 6)
+```
+
+
+```{r}
+#DEFINING PLOTS FOR STRUCTURE ACCESS
+# Function to calculate proportions
+calculate_proportions_structure <- function(data, thresholds) {
+  sapply(thresholds, function(th) {
+    sum(data$totstr_Cpoly[data$ICL_kWstr > th], na.rm = TRUE) / sum(data$totstr_Cpoly, na.rm = TRUE) * 100
+  })
+}
+
+# Function to generate plots
+generate_plot_structure_unitavg <- function(data_filtered, title) {
+  # Define the ranges and categories
+  ranges <- list(c(0, 1), c(1, 2), c(2, 3), c(3, 4.5), c(4.5, 9.5), c(9.5, Inf))
+  categories <- c("[0-1]", "[1-2]", "[2-3]", "[3-4.5]", "[4.5-9.5]", "[9.5+]")
+  thresholds <- c(0, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10)
+  
+  plot_data <- do.call(rbind, lapply(seq_along(ranges), function(i) {
+    data_filtered <- data_filtered %>% filter(unitsavg >= ranges[[i]][1] & unitsavg < ranges[[i]][2])
+    proportions <- calculate_proportions_structure(data_filtered, thresholds)
+    
+    data.frame(
+      Threshold = thresholds,
+      Proportion = proportions,
+      Category = categories[i]
+    )
+  }))
+  
+  ggplot(plot_data, aes(x = Threshold, y = Proportion, color = Category, group = Category)) +
+    geom_line(size = 1) +
+    geom_point(size = 3) +
+    scale_color_manual(values = c(
+      "[0-1]" = "steelblue1",
+      "[1-2]" = "steelblue2",
+      "[2-3]" = "steelblue3",
+      "[3-4.5]" = "steelblue4",
+      "[4.5-9.5]" = "midnightblue",
+      "[9.5+]" = "black"
+    )) +
+    scale_x_continuous(breaks = thresholds,
+                       labels = c(">0", "1", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+    scale_y_continuous(labels = scales::percent_format(scale = 1),
+                       limits = c(0, 100),
+                       breaks = c(0, 20, 40, 60, 80, 100)) +
+    labs(
+      title = title,
+      x = "Access threshold [kW]",
+      y = "Proportion of structures with access [%]",
+      color = "Number of units"
+    ) +
+    theme_minimal()
+}
+
+# Function to generate plots
+generate_plot_structure_MUD <- function(data_filtered, title) {
+  # Define the ranges and categories
+  ranges <- list(c(0, 0.2), c(0.2, 0.4), c(0.4, 0.6), c(0.6, 0.8), c(0.8, 1))
+  categories <- c("[0-0.2]", "[0.2-0.4]", "[0.4-0.6]", "[0.6-0.8]", "[0.8-1]")
+  thresholds <- c(0, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10)
+  
+    plot_data <- do.call(rbind, lapply(seq_along(ranges), function(i) {
+    data_filtered <- data_filtered %>% filter(MUD_pct >= ranges[[i]][1] & MUD_pct < ranges[[i]][2])
+    proportions <- calculate_proportions_structure(data_filtered, thresholds)
+    
+    data.frame(
+      Threshold = thresholds,
+      Proportion = proportions,
+      Category = categories[i]
+    )
+  }))
+  
+  ggplot(plot_data, aes(x = Threshold, y = Proportion, color = Category, group = Category)) +
+    geom_line(size = 1) +
+    geom_point(size = 3) +
+    scale_color_manual(values = c(
+      "[0-0.2]" = "steelblue1",
+      "[0.2-0.4]" = "steelblue2",
+      "[0.4-0.6]" = "steelblue3",
+      "[0.6-0.8]" = "steelblue4",
+      "[0.8-1]" = "midnightblue"
+    )) +
+    scale_x_continuous(breaks = thresholds,
+                       labels = c(">0", "1", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+    scale_y_continuous(labels = scales::percent_format(scale = 1),
+                       limits = c(0, 100),
+                       breaks = c(0, 20, 40, 60, 80, 100)) +
+    labs(
+      title = title,
+      x = "Access threshold (kW)",
+      y = "Proportion of structures with access",
+      color = "Percentage of MUDs"
+    ) +
+    theme_minimal()
+}
+```
+
+```{r}
+#STRUCTURE ACCESS BY AVERAGE UNITS
+PGE_straccess_unitavg <- generate_plot_structure_unitavg(PGE_ICAaccess_filtered, "PGE")
+SCE_straccess_unitavg <- generate_plot_structure_unitavg(SCE_ICAaccess_filtered, "SCE")
+
+# Combining and saving the plots
+combined_plot_str_unitavg <- grid.arrange(PGE_straccess_unitavg, SCE_straccess_unitavg, ncol = 2,
+                                 bottom = "Structure access considering the average number of units within a circuit polygon")
+
+ggsave("figures/access/plot_IOU_straccess_by_units.png", combined_plot_str_unitavg, width = 12, height = 6)
+```
+
+```{r}
+#STRUCTURE ACCESS BY PROPORTION OF MUDS
+PGE_straccess_MUD <- generate_plot_structure_MUD(PGE_ICAaccess_filtered, "PGE")
+SCE_straccess_MUD <- generate_plot_structure_MUD(SCE_ICAaccess_filtered, "SCE")
+
+# Combining and saving the plots
+combined_plot_str_MUD <- grid.arrange(PGE_straccess_MUD, SCE_straccess_MUD, ncol = 2,
+                                 bottom = "Structure access considering the percentage of MUDs within a circuit polygon")
+```
+
+```{r}
+#DEFINING PLOTS FOR HOUSEHOLD ACCESS
+# Function to calculate proportions
+calculate_proportions_household <- function(data, thresholds) {
+  sapply(thresholds, function(th) {
+    sum(data$tothh_Cpoly[data$ICL_e_kWphh_cap > th], na.rm = TRUE) / sum(data$tothh_Cpoly, na.rm = TRUE) * 100
+  })
+}
+
+# Function to generate plots
+generate_plot_household <- function(data_filtered, title) {
+  # Define the ranges and categories
+  ranges <- list(c(0, 0.2), c(0.2, 0.4), c(0.4, 0.6), c(0.6, 0.8), c(0.8, 1))
+  categories <- c("[0-0.2]", "[0.2-0.4]", "[0.4-0.6]", "[0.6-0.8]", "[0.8-1]")
+  thresholds <- c(0, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 7, 8, 9, 10)
+  
+  plot_data <- do.call(rbind, lapply(seq_along(ranges), function(i) {
+    data_filtered <- data_filtered %>% filter(MUD_pct >= ranges[[i]][1] & MUD_pct < ranges[[i]][2])
+    proportions <- calculate_proportions_household(data_filtered, thresholds)
+    
+    data.frame(
+      Threshold = thresholds,
+      Proportion = proportions,
+      Category = categories[i]
+    )
+  }))
+  
+  ggplot(plot_data, aes(x = Threshold, y = Proportion, color = Category, group = Category)) +
+    geom_line(size = 1) +
+    geom_point(size = 3) +
+    scale_color_manual(values = c(
+      "[0-0.2]" = "steelblue1",
+      "[0.2-0.4]" = "steelblue2",
+      "[0.4-0.6]" = "steelblue3",
+      "[0.6-0.8]" = "steelblue4",
+      "[0.8-1]" = "midnightblue"
+    )) +
+    scale_x_continuous(breaks = thresholds,
+                       labels = c(">0", "1", "1.5", "2", "3", "4", "4.5", "5", "6", "7", "8", "9", "10")) +
+    scale_y_continuous(labels = scales::percent_format(scale = 1),
+                       limits = c(0, 100),
+                       breaks = c(0, 20, 40, 60, 80, 100)) +
+    labs(
+      title = title,
+      x = "Access threshold (kW)",
+      y = "Proportion of households with access",
+      color = "Percentage of MUDs"
+    ) +
+    theme_minimal()
+}
+```
+
+```{r}
+#HOUSEHOLD ACCESS BY PROPORTION OF MUDS
+PGE_hhaccess_MUD <- generate_plot_household(PGE_ICAaccess_filtered, "PGE")
+SCE_hhaccess_MUD <- generate_plot_household(SCE_ICAaccess_filtered, "SCE")
+
+# Combining and saving the plots
+combined_plot_phh_MUD <- grid.arrange(PGE_hhaccess_MUD, SCE_hhaccess_MUD, ncol = 2,
+                                 bottom = "Household access considering the percentage of MUDs within a circuit polygon")
+
+ggsave("figures/access/plot_IOU_hhaccess_MUD.png", combined_plot_phh_MUD, width = 12, height = 6)
+```
+
+
+```{r}
+# Hide the legends in each individual plot
+plots <- list(PGE_straccess_MUD, SCE_straccess_MUD, PGE_hhaccess_MUD, SCE_hhaccess_MUD)
+plots_no_legend <- lapply(plots, function(p) p + theme(legend.position = "none"))
+
+# Extract the legend
+legend <- cowplot::get_legend(plots[[1]])
+
+# Combine the plots and the legend
+combined_plot_MUD <- cowplot::plot_grid(
+  plot_grid(plotlist = plots_no_legend, ncol = 2),
+  legend,
+  ncol = 2,
+  rel_widths = c(1, 0.2)
+)
+
+# Save the combined plot
+ggsave("figures/access/plot_IOU_access_MUD.png", combined_plot_MUD, width = 12, height = 6)
+```
+
+
+------------------------------------------------------------------------
+
+GRID LIMITS - EXTRA FEATURES
+
+------------------------------------------------------------------------
+```{r}
+
+# Order the data by ICL_kWphh (ascending) and unitsavg (descending), then get the top 50 circuit segments
+top_50_GEOIDs <- PGE_ICAaccess_filtered %>%
+    arrange(ICL_kWphh, desc(unitsavg)) %>%
+    head(50)
+
+# Display the top 50 circuit segments
+print(select(top_50_GEOIDs, GEOID, CircuitName, ICL_kWphh, unitsavg))
+```
+
+```{r}
+# Group by GEOID --> median, 1st quartile, and 3rd quartile of ICL_kWphh
+summarized_data <- PGE_ICAaccess_filtered %>%
+  group_by(GEOID) %>%
+  dplyr::summarize(
+    median_ICL_kWphh = median(ICL_kWphh, na.rm = TRUE),
+    first_quartile_ICL_kWphh = quantile(ICL_kWphh, 0.25, na.rm = TRUE),
+    third_quartile_ICL_kWphh = quantile(ICL_kWphh, 0.75, na.rm = TRUE),
+    .groups = 'drop' 
+  ) %>%
+  arrange(desc(median_ICL_kWphh))
+
+# Display the summarized data
+print(summarized_data)
+```
+
+```{r}
+ggplot(summarized_data, aes(x = reorder(GEOID, -median_ICL_kWphh), y = median_ICL_kWphh)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_errorbar(
+    aes(ymin = first_quartile_ICL_kWphh, ymax = third_quartile_ICL_kWphh), 
+    width = 0.2
+  ) +
+  labs(
+    title = "Distribution of ICL_kWphh by GEOID",
+    x = "",  
+    y = "ICL_kWphh"
+  ) +
+  scale_y_continuous(limits = c(0, 50)) +
+  theme(axis.text.x = element_blank()) +
+  theme_minimal()
+```
+
+------------------------------------------------------------------------
+
+GRID LIMITS - PLOTS: COUNTY COMPARISON 
+
+------------------------------------------------------------------------
+
+```{r}
+# Household Access - San Francisco County
+PGE_ICAaccess_filtered_6075 <- PGE_ICAaccess_filtered %>%
+  filter(startsWith(as.character(GEOID), "6075"))
+
+PGE_hhaccess_MUD_6075 <- generate_plot_household(PGE_ICAaccess_filtered_6075, "San Francisco")
+
+print(PGE_hhaccess_MUD_6075)
+```
+
+```{r}
+# Household Access - Alameda County
+PGE_ICAaccess_filtered_6001 <- PGE_ICAaccess_filtered %>%
+  filter(startsWith(as.character(GEOID), "6001"))
+
+PGE_hhaccess_MUD_6001 <- generate_plot_household(PGE_ICAaccess_filtered_6001, "Alameda")
+
+print(PGE_hhaccess_MUD_6001)
+```
+
+```{r}
+# Household Access - Fresno County
+PGE_ICAaccess_filtered_6019 <- PGE_ICAaccess_filtered %>%
+  filter(startsWith(as.character(GEOID), "6019"))
+
+PGE_hhaccess_MUD_6019 <- generate_plot_household(PGE_ICAaccess_filtered_6019, "Fresno")
+
+print(PGE_hhaccess_MUD_6019)
+```
+
+```{r}
+# Household Access - Monterey County
+PGE_ICAaccess_filtered_6053 <- PGE_ICAaccess_filtered %>%
+  filter(startsWith(as.character(GEOID), "6053"))
+
+PGE_hhaccess_MUD_6053 <- generate_plot_household(PGE_ICAaccess_filtered_6053, "Monterey")
+
+print(PGE_hhaccess_MUD_6053)
+```
+
+```{r}
+# Household Access - County level
+plots <- list(PGE_hhaccess_MUD_6075, PGE_hhaccess_MUD_6001, PGE_hhaccess_MUD_6019, PGE_hhaccess_MUD_6053)
+plots_no_legend <- lapply(plots, function(p) p + theme(legend.position = "none"))
+
+# Extract the legend
+legend <- cowplot::get_legend(plots[[1]])
+
+# Combine the plots and the legend
+combined_plot_MUD_county <- cowplot::plot_grid(
+  plot_grid(plotlist = plots_no_legend, ncol = 2),
+  legend,
+  ncol = 2,
+  rel_widths = c(1, 0.2)
+)
+
+# Save the combined plot
+ggsave("figures/access/plot_PGE_access_MUD_county.jpg", combined_plot_MUD_county, width = 12, height = 6)
+```
+
+
+
+```{r}
+#COMPUTING THE PROPORTION OF ACCESS BY COUNTY
+unique_GEOID_demo <- PGE_ICAaccess_filtered %>%
+  group_by(GEOID, county) %>%
+  summarise(totpop = first(totpop), tothh = first(tothh), .groups = 'drop')
+
+# Step 2: Summarize the data
+PGE_ICAaccess_county <- PGE_ICAaccess_filtered %>%
+  group_by(county) %>%
+  summarise(
+    Proportion_ICL_above_1_5 = sum(tothh_Cpoly[ICL_kWphh >= 1.5], na.rm = TRUE) / sum(tothh_Cpoly, na.rm = TRUE)*100,
+    Proportion_ICL_above_4_5 = sum(tothh_Cpoly[ICL_kWphh >= 4.5], na.rm = TRUE) / sum(tothh_Cpoly, na.rm = TRUE)*100,
+    Nbr_CircSegPoly = n(), # New column to store the number of rows considered
+    .groups = 'drop'
+  ) %>%
+  left_join(
+    unique_GEOID_demo %>%
+      group_by(county) %>%
+      summarise(totpop_county = sum(totpop, na.rm = TRUE), tothh_county = sum(tothh, na.rm = TRUE), .groups = 'drop'),
+    by = "county"
+  )
+```
+
+
+```{r}
+# Creating a new categorical variable based on Nbr_CircSegPoly values
+PGE_ICAaccess_county <- PGE_ICAaccess_county %>%
+  mutate(Cat_CircSegPoly = case_when(
+    Nbr_CircSegPoly <= 10 ~ "[1-10]",
+    Nbr_CircSegPoly > 10 & Nbr_CircSegPoly <= 100 ~ "[10-100]",
+    Nbr_CircSegPoly > 100 & Nbr_CircSegPoly <= 500 ~ "[100-500]",
+    Nbr_CircSegPoly > 500 & Nbr_CircSegPoly <= 1000 ~ "[500-1000]",
+    Nbr_CircSegPoly > 1000 ~ "[>1000]"
+    ))
+
+PGE_ICAaccess_county <- PGE_ICAaccess_county %>%
+  mutate(Cat_totpop = case_when(
+    totpop_county <= 1000 ~ "[1-1'000]",
+    totpop_county > 1000 & totpop_county <= 10000 ~ "[1'000-10'000]",
+    totpop_county > 10000 & totpop_county <= 100000 ~ "[10'000-100'000]",
+    totpop_county > 100000 & totpop_county <= 500000 ~ "[100'000-500'000]",
+    totpop_county > 500000 ~ "[>500'000]"
+    ))
+
+PGE_ICAaccess_county <- PGE_ICAaccess_county %>%
+  mutate(Cat_tothh = case_when(
+    tothh_county <= 500 ~ "[1-500]",
+    tothh_county > 500 & tothh_county <= 1000 ~ "[500-1'000]",
+    tothh_county > 1000 & tothh_county <= 10000 ~ "[1'000-10'000]",
+    tothh_county > 10000 & tothh_county <= 100000 ~ "[10'000-100'000]",
+    tothh_county > 100000 ~ "[>100'000]"
+    ))
+
+#Ascending order
+PGE_ICAaccess_county <- PGE_ICAaccess_county %>%
+  arrange(Proportion_ICL_above_1_5) %>%
+  mutate(county = factor(county, levels = county))
+
+```
+
+```{r}
+# Creating a line plot
+PGE_ICAaccess_county$Cat_CircSegPoly <- factor(PGE_ICAaccess_county$Cat_CircSegPoly,
+                                               levels = c("[1-10]", "[10-100]", "[100-500]", "[500-1000]", "[>1000]"))
+
+PGE_ICAaccess_county_CircSeg <- ggplot(PGE_ICAaccess_county) +
+  geom_segment(aes(x = county, xend = county,
+                   y = Proportion_ICL_above_1_5, yend = Proportion_ICL_above_4_5,
+                   color = Cat_CircSegPoly),
+               size = 1) +
+  geom_crossbar(aes(x = county, y = Proportion_ICL_above_1_5, ymin = Proportion_ICL_above_1_5, ymax = Proportion_ICL_above_1_5),
+                width = 0.5, color = "black", size = 0.4) +
+  geom_crossbar(aes(x = county, y = Proportion_ICL_above_4_5, ymin = Proportion_ICL_above_4_5, ymax = Proportion_ICL_above_4_5),
+                width = 0.5, color = "black", size = 0.4) +
+  scale_color_manual(values = c("[1-10]" = "red", "[10-100]" = "skyblue", "[100-500]" = "dodgerblue", "[500-1000]" = "royalblue", "[>1000]" = "navy")) +
+  labs(
+    title = "Comparison of Proportions Above 1.5 and 4.5kW access by County",
+    x = "County",
+    y = "Proportion",
+    color = "Nbr_CircSegPoly"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_y_continuous(labels = scales::percent_format(scale = 1))  # Format y-axis as percentage
+
+ggsave("figures/access/PGE_ICAaccess_county_CircSeg.png", PGE_ICAaccess_county_CircSeg,  width = 10, height = 6, units = "in")
+
+print(PGE_ICAaccess_county_CircSeg)
+
+```
+
+
+```{r}
+# Creating a line plot
+PGE_ICAaccess_county$Cat_totpop <- factor(PGE_ICAaccess_county$Cat_totpop,
+                                          levels = c("[1-1'000]", "[1'000-10'000]", "[10'000-100'000]", "[100'000-500'000]", "[>500'000]"))
+
+PGE_ICAaccess_county_totpop <- ggplot(PGE_ICAaccess_county) +
+  geom_segment(aes(x = county, xend = county,
+                   y = Proportion_ICL_above_1_5, yend = Proportion_ICL_above_4_5,
+                   color = Cat_totpop),
+               size = 1) +
+  geom_crossbar(aes(x = county, y = Proportion_ICL_above_1_5, ymin = Proportion_ICL_above_1_5, ymax = Proportion_ICL_above_1_5),
+                width = 0.5, color = "black", size = 0.4) +
+  geom_crossbar(aes(x = county, y = Proportion_ICL_above_4_5, ymin = Proportion_ICL_above_4_5, ymax = Proportion_ICL_above_4_5),
+                width = 0.5, color = "black", size = 0.4) +
+  scale_color_manual(values = c("[1-1'000]" = "red", "[1'000-10'000]" = "skyblue", "[10'000-100'000]" = "dodgerblue", "[100'000-500'000]" = "royalblue", "[>500'000]" = "navy")) +
+  labs(
+    title = "Comparison of Proportions Above 1.5 and 4.5kW access by County",
+    x = "County",
+    y = "Proportion",
+    color = "Cat_totpop"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_y_continuous(labels = scales::percent_format(scale = 1))  # Format y-axis as percentage
+
+ggsave(filename = "figures/access/PGE_ICAaccess_county_totpop.png", plot = PGE_ICAaccess_county_totpop, width = 10, height = 6, units = "in") 
+
+print(PGE_ICAaccess_county_totpop)
+```
+
+```{r}
+# Creating a line plot
+PGE_ICAaccess_county$Cat_tothh <- factor(PGE_ICAaccess_county$Cat_tothh,
+                                          levels = c("[1-500]", "[500-1'000]", "[1'000-10'000]", "[10'000-100'000]", "[>100'000]"))
+
+PGE_ICAaccess_county_tothh <- ggplot(PGE_ICAaccess_county) +
+  geom_segment(aes(x = county, xend = county, y = Proportion_ICL_above_1_5, yend = Proportion_ICL_above_4_5, color = Cat_tothh), size = 1) +
+  geom_crossbar(aes(x = county, y = Proportion_ICL_above_1_5, ymin = Proportion_ICL_above_1_5, ymax = Proportion_ICL_above_1_5), width = 0.5, color = "black", size = 0.4) +
+  geom_crossbar(aes(x = county, y = Proportion_ICL_above_4_5, ymin = Proportion_ICL_above_4_5, ymax = Proportion_ICL_above_4_5),
+                width = 0.5, color = "black", size = 0.4) +
+  scale_color_manual(values = c("[1-500]" = "red", "[500-1'000]" = "skyblue", "[1'000-10'000]" = "dodgerblue", "[10'000-100'000]" = "royalblue", "[>100'000]" = "navy")) +
+  labs(
+    title = "Comparison of Proportions Above 1.5 and 4.5kW access by County",
+    x = "County",
+    y = "Proportion",
+    color = "Cat_tothh"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_y_continuous(labels = scales::percent_format(scale = 1))  # Format y-axis as percentage
+
+ggsave(filename = "figures/access/PGE_ICAaccess_county_tothh.png", plot = PGE_ICAaccess_county_tothh, width = 10, height = 6, units = "in")
+
+print(PGE_ICAaccess_county_tothh)
+```
