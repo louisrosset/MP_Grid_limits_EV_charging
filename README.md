@@ -1,7 +1,9 @@
-# My master thesis
-## An Analysis of Electric Vehicle Charging Infrastructures in California’s Multi-Unit Dwellings
+# Master thesis
+## Effects of Grid Infrastructure Limits on Electric Vehicle Charging Access for California Households
 Berkeley, February 2024
 
+01_demodata.Rmd
+-
 
 02_cpolys.Rmd
 - Pulls in circuit polygon data (outputs from ArcGIS) and analyzes outcomes of spatial processing
