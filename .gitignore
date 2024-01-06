@@ -1,5 +1,6 @@
 *.csv
 *.txt
 *.RData
+*.html
 
 !**/07_regression/**
