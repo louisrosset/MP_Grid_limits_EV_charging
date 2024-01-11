@@ -10,6 +10,7 @@ library(readr)
 library(ggplot2)
 library(cowplot)
 library(gridExtra)
+library(colorspace)
 # library(iRF)
 ```
 
@@ -79,7 +80,7 @@ a <- ggplot(plot_eval_df, aes(x=group_var, y=rmse, color=model)) +
       facet_wrap(~IOU, scales="free", nrow=2) + 
       geom_line(aes(group=model)) + geom_point() +
       labs(x="Variable group", y="Root mean squared error (kW/hh)", color="") +
-      #scale_color_discrete_qualitative(palette="Dark3") +
+      scale_color_discrete_qualitative(palette="Dark3") +
       coord_cartesian(ylim=c(0,6))
 
 ggsave("regression_eval_metrics.png", a, path="figures_eval/", width=8, height=5.5)
@@ -112,11 +113,13 @@ for(iou_val in unique(IOU_FI_all_df$IOU)) {
   data_subset <- filter(IOU_FI_all_df, IOU == iou_val)
   
   imp <- ggplot(data_subset, aes(x=reorder(feature, -FI_value), y=FI_value*100)) +
-    geom_bar(stat="identity") +
+    geom_bar(stat="identity", fill = c(qualitative_hcl(2,palette="Dark3")[2])) +
     facet_wrap(~IOU, scales="free_x", nrow=1) +
     labs(x="", y="Importance value (%)") +
     theme_light() +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+    # scale_color_discrete_qualitative(palette="Dark3")
+    # scale_fill_manual(values=c(qualitative_hcl(1,palette="Dark3")[2]))
   
   # Add the plot to the list
   plots[[iou_val]] <- imp
@@ -133,7 +136,7 @@ print(b)
 # Combine final_plot and another_plot in one row
 combined_plot <- plot_grid(a, NULL, b, ncol = 3, rel_widths = c(1, 0.1, 1), scale=0.95, labels=c('a','','b'), label_size=12)
 
-ggsave("Combined_Row_Plot.png", combined_plot, path="figures_eval/", width=12, height=7.5)
+ggsave("Reg_perf_imp_metrics.png", combined_plot, path="figures_eval/", width=12, height=7.5)
 
 # Print the combined plot
 print(combined_plot)
