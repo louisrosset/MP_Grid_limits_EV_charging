@@ -9,9 +9,14 @@ library(tidyverse)
 library(readr)
 library(ggplot2)
 library(cowplot)
+library(grid)
 library(gridExtra)
 library(colorspace)
 # library(iRF)
+
+text_y_imp <- textGrob("Importance (%)", 
+                       gp = gpar(fontsize = 10, fontface = "bold"), 
+                       rot = 90)
 ```
 
 ```{r}
@@ -88,24 +93,27 @@ print(a)
 ```
 
 ```{r}
-#Extract SCE and PGE features importance
-process_FI_data <- function(filename, iou_value) {
+#Extract features importance values
+process_FI_data <- function(filename) {
   fi_df <- read.csv(paste0("feat_imp/", filename), header = TRUE, na.strings = "?")
-  fi_df <- subset(fi_df, X != "ICA_pct")
-  fi_df$IOU <- iou_value
+  parts <- strsplit(basename(filename), "_")[[1]]
+  fi_df$IOU <- parts[1]
   names(fi_df)[1] <- "feature"
   names(fi_df)[2] <- "FI_value"
+  fi_df$Variable <- gsub(".csv", "", parts[3])
+  
   return(fi_df)
 }
-
-PGE_FI_all_df <- process_FI_data("PGE_FeatImp_all.csv", "PGE")
-SCE_FI_all_df <- process_FI_data("SCE_FeatImp_all.csv", "SCE")
-
-IOU_FI_all_df <- rbind(PGE_FI_all_df, SCE_FI_all_df)
-rm(PGE_FI_all_df, SCE_FI_all_df)
 ```
 
 ```{r}
+#Features importance - ALL
+PGE_FI_all_df <- process_FI_data("PGE_FeatImp_all.csv")
+SCE_FI_all_df <- process_FI_data("SCE_FeatImp_all.csv")
+
+IOU_FI_all_df <- rbind(PGE_FI_all_df, SCE_FI_all_df)
+rm(PGE_FI_all_df, SCE_FI_all_df)
+
 plots <- list()
 
 for(iou_val in unique(IOU_FI_all_df$IOU)) {
@@ -115,25 +123,24 @@ for(iou_val in unique(IOU_FI_all_df$IOU)) {
   imp <- ggplot(data_subset, aes(x=reorder(feature, -FI_value), y=FI_value*100)) +
     geom_bar(stat="identity", fill = c(qualitative_hcl(2,palette="Dark3")[2])) +
     facet_wrap(~IOU, scales="free_x", nrow=1) +
-    labs(x="", y="Importance value (%)") +
+    labs(x= NULL, y= NULL) +
     theme_light() +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-    # scale_color_discrete_qualitative(palette="Dark3")
-    # scale_fill_manual(values=c(qualitative_hcl(1,palette="Dark3")[2]))
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    scale_y_continuous(breaks=seq(0,50, by=10))
   
-  # Add the plot to the list
   plots[[iou_val]] <- imp
 }
 
 b <- do.call(grid.arrange, c(plots, ncol=1))
+b <- grid.arrange(text_y_imp, b, widths=c(0.2, 7.5), ncol = 2)
+
 rm(data_subset, plots, imp)
-ggsave("RF_importance_values.png", b, path="figures_eval/", width=8, height=5.5)
+ggsave("RF_importance_all.png", b, path="figures_eval/", width=8, height=5.5)
 print(b)
 ```
 
 ```{r}
-#Combine plots
-# Combine final_plot and another_plot in one row
+#Plot Figure 3.4. 
 combined_plot <- plot_grid(a, NULL, b, ncol = 3, rel_widths = c(1, 0.1, 1), scale=0.95, labels=c('a','','b'), label_size=12)
 
 ggsave("Reg_perf_imp_metrics.png", combined_plot, path="figures_eval/", width=12, height=7.5)
@@ -141,6 +148,141 @@ ggsave("Reg_perf_imp_metrics.png", combined_plot, path="figures_eval/", width=12
 # Print the combined plot
 print(combined_plot)
 ```
+
+```{r}
+#Features importance - SERVICE
+PGE_FI_service_df <- process_FI_data("PGE_FeatImp_service.csv")
+SCE_FI_service_df <- process_FI_data("SCE_FeatImp_service.csv")
+
+IOU_FI_service_df <- rbind(PGE_FI_service_df, SCE_FI_service_df)
+rm(PGE_FI_service_df, SCE_FI_service_df)
+
+plots <- list()
+
+for(iou_val in unique(IOU_FI_service_df$IOU)) {
+  # Filter the data for the current IOU
+  data_subset <- filter(IOU_FI_service_df, IOU == iou_val)
+  
+  imp <- ggplot(data_subset, aes(x=reorder(feature, -FI_value), y=FI_value*100)) +
+    geom_bar(stat="identity") +
+    facet_wrap(~IOU, scales="free_x", nrow=1) +
+    labs(x=NULL, y=NULL) +
+    theme_light() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    scale_y_continuous(breaks=seq(0,50, by=10))
+  
+  plots[[iou_val]] <- imp
+}
+
+c <- do.call(grid.arrange, c(plots, ncol=1))
+c <- grid.arrange(text_y_imp, c, widths=c(0.2, 7.5), ncol = 2)
+
+rm(data_subset, plots, imp)
+# ggsave("RF_importance_service.png", c, path="figures_eval/", width=8, height=5.5)
+```
+
+```{r}
+#Features importance - Infrastructure
+PGE_FI_infra_df <- process_FI_data("PGE_FeatImp_infra.csv")
+SCE_FI_infra_df <- process_FI_data("SCE_FeatImp_infra.csv")
+
+IOU_FI_infra_df <- rbind(PGE_FI_infra_df, SCE_FI_infra_df)
+rm(PGE_FI_infra_df, SCE_FI_infra_df)
+
+plots <- list()
+
+for(iou_val in unique(IOU_FI_infra_df$IOU)) {
+  # Filter the data for the current IOU
+  data_subset <- filter(IOU_FI_infra_df, IOU == iou_val)
+  
+  imp <- ggplot(data_subset, aes(x=reorder(feature, -FI_value), y=FI_value*100)) +
+    geom_bar(stat="identity") +
+    facet_wrap(~IOU, scales="free_x", nrow=1) +
+    labs(x=NULL, y=NULL) +
+    theme_light() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    scale_y_continuous(breaks=seq(0,50, by=20))
+  
+  plots[[iou_val]] <- imp
+}
+
+d <- do.call(grid.arrange, c(plots, ncol=1))
+d <- grid.arrange(text_y_imp, d, widths=c(0.2, 7.5), ncol = 2)
+
+rm(data_subset, plots, imp)
+# ggsave("RF_importance_infra.png", d, path="figures_eval/", width=8, height=5.5)
+```
+
+```{r}
+#Features importance - Demographic
+PGE_FI_demo_df <- process_FI_data("PGE_FeatImp_demo.csv")
+SCE_FI_demo_df <- process_FI_data("SCE_FeatImp_demo.csv")
+
+IOU_FI_demo_df <- rbind(PGE_FI_demo_df, SCE_FI_demo_df)
+rm(PGE_FI_demo_df, SCE_FI_demo_df)
+
+plots <- list()
+
+for(iou_val in unique(IOU_FI_demo_df$IOU)) {
+  # Filter the data for the current IOU
+  data_subset <- filter(IOU_FI_demo_df, IOU == iou_val)
+  
+  imp <- ggplot(data_subset, aes(x=reorder(feature, -FI_value), y=FI_value*100)) +
+    geom_bar(stat="identity") +
+    facet_wrap(~IOU, scales="free_x", nrow=1) +
+    labs(x=NULL, y=NULL) +
+    theme_light() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    scale_y_continuous(breaks=seq(0,50, by=20))
+  
+  plots[[iou_val]] <- imp
+}
+
+e <- do.call(grid.arrange, c(plots, ncol=1))
+e <- grid.arrange(text_y_imp, e, widths=c(0.2, 7.5), ncol = 2)
+
+rm(data_subset, plots, imp)
+# ggsave("RF_importance_demo.png", e, path="figures_eval/", width=8, height=5.5)
+```
+
+```{r}
+#Features importance - Demographic
+PGE_FI_demohhdens_df <- process_FI_data("PGE_FeatImp_demo_hhdens.csv")
+SCE_FI_demohhdens_df <- process_FI_data("SCE_FeatImp_demo_hhdens.csv")
+
+IOU_FI_demohhdens_df <- rbind(PGE_FI_demohhdens_df, SCE_FI_demohhdens_df)
+rm(PGE_FI_demohhdens_df, SCE_FI_demohhdens_df)
+
+plots <- list()
+
+for(iou_val in unique(IOU_FI_demohhdens_df$IOU)) {
+  # Filter the data for the current IOU
+  data_subset <- filter(IOU_FI_demohhdens_df, IOU == iou_val)
+  
+  imp <- ggplot(data_subset, aes(x=reorder(feature, -FI_value), y=FI_value*100)) +
+    geom_bar(stat="identity") +
+    facet_wrap(~IOU, scales="free_x", nrow=1) +
+    labs(x=NULL, y=NULL) +
+    theme_light() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    scale_y_continuous(breaks=seq(0,20, by=5))
+  
+  plots[[iou_val]] <- imp
+}
+
+f <- do.call(grid.arrange, c(plots, ncol=1))
+f <- grid.arrange(text_y_imp, f, widths=c(0.2, 7.5), ncol = 2)
+
+rm(data_subset, plots, imp)
+# ggsave("RF_importance_demohhdens.png", f, path="figures_eval/", width=8, height=5.5)
+```
+
+```{r}
+#Plot Importance - Appendix
+importance_comb_plot <- plot_grid(c, d, e, f, nrow = 2, ncol = 2, scale=0.95, labels=c('a','b','c','d'), label_size=20)
+ggsave("importance_comb_plot.png", importance_comb_plot, path="figures_eval/", width=16, height=16)
+```
+
 
 --------------------------------------------------
 
