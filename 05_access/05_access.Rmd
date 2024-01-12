@@ -7,13 +7,9 @@ This code calculates overall grid access for households in PG&E and SCE service 
 
 ```{r}
 library(tidyverse)
-library(tictoc)
 library(reshape2)
 library(ggplot2)
 library(stringr)
-library(tidytext)
-library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
-library(readxl)
 library(colorspace)
 library(cowplot)
 ```
@@ -324,12 +320,11 @@ ggplot(compar_acc, aes(x = year, y = value, fill = threshold)) +
   geom_bar(stat = "identity", position = "stack")+
   facet_wrap(~IOU) +
   scale_fill_manual(values = c("lightgrey", "#c9f0d3", "#77b1a9", "#4b5d67"),
-                    labels = c(expression(italic("No access")), "10 kW", "1.5 kW", ">0 kW")) +
-  labs(x = "", 
+                    labels = c(expression(italic("No access")), "> 10", "1.5 - 10", "0 - 1.5")) +
+  labs(x = NULL, 
        y = expression("Households x10"^"6"),
-       fill = "Access threshold") +
+       fill = "Access levels (in kW/hh)") +
   theme_light()
 
 ggsave("figures/access/comp_access_2019_2023.png", width=8, height= 4.5)
-
 ```

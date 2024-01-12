@@ -7,13 +7,9 @@ This notebook calculates and analyses household grid access for all counties.
 
 ```{r}
 library(tidyverse)
-library(tictoc)
 library(reshape2)
 library(ggplot2)
 library(stringr)
-library(tidytext)
-library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
-library(readxl)
 library(colorspace)
 library(cowplot)
 ```
@@ -26,7 +22,7 @@ SCE_ICAaccess = read.csv("SCE/circuitfiles/SCE_ICAalldemoalloc.csv", header=T, n
 PGEtypes = read.csv("PGE/circuitfiles/PGE_ICAalldemoallocclasses.csv", header=T, na.strings="?")
 PGE_ICAaccess = read.csv("PGE/circuitfiles/PGE_ICAalldemoalloc.csv", header=T, na.strings="?", colClasses=as.character(PGEtypes$x))
 
-at <- c("1", "1.5", "2.0", "3.0", "4.0", "4.5", "5.0", "6.0", "7.0", "8.0", "9.0", "10.")
+at <- c("1", "1.5", "2.0", "3.0", "4.0", "5.0", "6.0", "7.0", "8.0", "9.0", "10.")
 ```
 
 ```{r}
@@ -156,8 +152,8 @@ IOU_access_county_plot <- ggplot(plot) +
   theme(axis.text.x = element_text(size = 9, angle = 45, hjust = 1),
         legend.margin=margin(), legend.text=element_text(size=10)) +
   scale_y_continuous(labels = scales::percent_format(scale = 100)) +
-  scale_color_discrete_sequential(palette="Viridis", nmax=4, order=4:1) +
-  scale_fill_discrete_sequential(palette="Viridis", nmax=4, order=4:1) +
+  scale_color_discrete_sequential(palette="Dark Mint", nmax=4, order=1:4) +
+  scale_fill_discrete_sequential(palette="Dark Mint", nmax=4, order=1:4) +
   guides(shape=guide_legend(nrow=4,title.position="top"))
 
 ggsave("figures/access/IOU_access_county.png", IOU_access_county_plot,  width = 15.5, height = 6.5, units = "in")
