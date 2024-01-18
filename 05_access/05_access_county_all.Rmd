@@ -94,8 +94,9 @@ hhexcl_by_county <- IOU_ICAaccess_grid_cty %>%
 
 cat("In total,", round(sum(hhexcl_by_county$hhexcl, na.rm = TRUE), 1),"households are not taken into account by excluding some unrepresentative combinations of counties and IOUs.")
 
+
 IOU_ICAaccess_grid_cty <- IOU_ICAaccess_grid_cty %>%
-    filter(!(county == "Alpine"),
+    filter(!(county == "Alpine" & IOU == "SCE"),
            !(county == "Fresno" & IOU == "SCE"),
            !(county == "Inyo" & IOU == "PGE"),
            !(county == "Mariposa" & IOU == "SCE"),
@@ -104,7 +105,7 @@ IOU_ICAaccess_grid_cty <- IOU_ICAaccess_grid_cty %>%
            !(county == "Ventura" & IOU == "PGE"),
            !(county == "Imperial"),
            !(county == "Lassen"),
-           !(county == "Madera"),
+           !(county == "Madera" & IOU == "SCE"),
            !(county == "San Diego"),
            !(county == "Siskiyou"),
            !(county == "Trinity"))
@@ -146,8 +147,8 @@ IOU_access_county_plot <- ggplot(plot) +
   labs(
     x = "County",
     y = "Proportion of households with access",
-    color=expression("Households x10"^"3"),
-    fill=expression("Households x10"^"3")
+    color=expression("Total households served x10"^"3"),
+    fill=expression("Total households served x10"^"3")
   ) + theme_light() +
   theme(axis.text.x = element_text(size = 9, angle = 45, hjust = 1),
         legend.margin=margin(), legend.text=element_text(size=10)) +
@@ -156,7 +157,7 @@ IOU_access_county_plot <- ggplot(plot) +
   scale_fill_discrete_sequential(palette="Dark Mint", nmax=4, order=1:4) +
   guides(shape=guide_legend(nrow=4,title.position="top"))
 
-ggsave("figures/access/IOU_access_county.png", IOU_access_county_plot,  width = 15.5, height = 6.5, units = "in")
+ggsave("figures/access/IOU_access_county.png", IOU_access_county_plot,  width = 13.5, height = 6.5, units = "in")
 
 print(IOU_access_county_plot)
 ```

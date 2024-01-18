@@ -299,10 +299,93 @@ df_p <- read.csv(paste0("figures/lowessci/", featscales[i, "f_cat"], featscales[
 }
 ```
 
-Refining plots manually for key variables
+Refining lowess plots manually for key variables
 --------------------------------------------------------------------------------------------
 
-Lowess plots - race
+Plot A - Households on circuit
+
+```{r}
+df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[10,"f_cat"],featscales[10,"feature"],"_lfit.csv"),
+                              header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
+                     feature=featscales[10,"feature"])
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
+  # theme(legend.position="none", axis.title=element_blank()),
+  # guides(color=none(), fill=none()),
+  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
+  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
+  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
+  geom_line(aes(y=lfit, color=feature)), scale_x_continuous(breaks=seq(0,6,by=2)),
+  scale_fill_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
+  scale_color_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
+  labs(x="Households served by circuit (thousands)", y=plotlabs[1], alpha=expression("Households (x10"^"3)")),
+  guides(fill = "none", color = "none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+)
+
+a <- ggplot(filter(df_p), aes(x=var_bin/1000, weight=tothh_Cpoly)) + plotops
+
+print(a)
+
+ggsave("serv_tothh_ctot_2.png", a, path="figures/lowesscomb/", width=8, height=5.5)
+```
+
+Plot B - Length of full circuit
+
+```{r}
+df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[2,"f_cat"],featscales[2,"feature"],"_lfit.csv"),
+                              header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
+                     feature=featscales[2,"feature"])
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
+  # theme(legend.position="none", axis.title=element_blank()),
+  # guides(color=none(), fill=none()),
+  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
+  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
+  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
+  geom_line(aes(y=lfit, color=feature)), #scale_x_continuous(breaks=seq(0,6,by=2)),
+  scale_fill_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
+  scale_color_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
+  labs(x="Length of full circuit (km))", y=plotlabs[1], alpha=expression("Households (x10"^"3)")),
+  guides(fill = "none", color = "none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+)
+
+b <- ggplot(filter(df_p), aes(x=var_bin/1000, weight=tothh_Cpoly)) + plotops
+
+print(b)
+
+ggsave("infra_Length_m_ctot_2.png", b, path="figures/lowesscomb/", width=8, height=5.5)
+```
+Plot C - Household density
+
+```{r}
+df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[27,"f_cat"],featscales[27,"feature"],"_lfit.csv"),
+                              header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
+                     feature=featscales[27,"feature"])
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
+  # theme(legend.position="none", axis.title=element_blank()),
+  # guides(color=none(), fill=none()),
+  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
+  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
+  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
+  geom_line(aes(y=lfit, color=feature)), scale_x_continuous(breaks=seq(0,10,by=2)),
+  scale_fill_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
+  scale_color_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
+  labs(x="Household density (thousands households per sq.km.)", y=plotlabs[1], alpha=expression("Households (x10"^"3)")),
+  guides(fill = "none", color = "none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+)
+
+c <- ggplot(filter(df_p), aes(x=var_bin/1000, weight=tothh_Cpoly)) + plotops
+
+print(c)
+
+ggsave("demo_hhdensity_hhsqkm_2.png", c, path="figures/lowesscomb/", width=8, height=5.5)
+```
+
+Plot D - Race
 
 ```{r}
 df_p <- read.csv(paste0("figures/lowessci/",featscales[13,"f_cat"],featscales[13,"feature"],"_lfit.csv"), 
@@ -327,18 +410,21 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   geom_line(aes(y=lfit, color=feature)),
   scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
   scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
-  labs(x="Population identifying as racial/ethnic group (%)", y=plotlabs[1], fill="Racial/ethnic groups", color="Racial/ethnic groups", color="Racial/ethnic groups"))
+  labs(x="Population identifying as racial/ethnic group (%)", y=plotlabs[1], fill="Racial/ethnic groups", color="Racial/ethnic groups"),
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
 
-a <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops +
+d <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops +
    scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
 
-ggsave("demo_race_all.png", a, path="figures/lowesscomb/", width=8, height=5.5)
+ggsave("demo_race_all.png", d, path="figures/lowesscomb/", width=8, height=5.5)
 
-print(a)
+print(d)
 ```
 
 
-Lowess plots - income 
+Plot E1/E2 - Income 
 
 ```{r}
 df_p <- rbind(mutate(read.csv(paste0("figures/lowessci/",featscales[18,"f_cat"],featscales[18,"feature"],"_lfit.csv"), 
@@ -350,7 +436,6 @@ df_p <- rbind(mutate(read.csv(paste0("figures/lowessci/",featscales[18,"f_cat"],
   mutate(feature = ifelse(feature=="inc50kbelow_pct","<$50",">=$150k"))
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
@@ -358,13 +443,16 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   scale_shape_manual(values=c(21,22)),
   scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
   scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
-  labs(x="Households earning in income tier (%)", y=plotlabs[1], fill="Income tier", color="Income tier", shape="Income tier", alpha=expression("Households (x10"^"3)")))
+  labs(x="Households earning in income tier (%)", y=plotlabs[1], fill="Income tier", color="Income tier", shape="Income tier", alpha=expression("Households (x10"^"3)")),
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE), shape = guide_legend(nrow = 1, byrow = TRUE), alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
 
-b1 <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops + 
+e1 <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops + 
   scale_y_continuous(breaks=seq(0,3,1)) + coord_cartesian(ylim=c(0,3))
 
-print(b1)
-ggsave("demo_inc_all.png", b1, path="figures/lowesscomb/", width=8, height=5.5)
+print(e1)
+ggsave("demo_inc_all.png", e1, path="figures/lowesscomb/", width=8, height=5.5)
 
 
 df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[20,"f_cat"],featscales[20,"feature"],"_lfit.csv"),
@@ -372,25 +460,25 @@ df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[20,"f_cat"],featsc
                      feature=featscales[20,"feature"])
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()),
-  # guides(color=none(), fill=none()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)), scale_x_continuous(breaks=seq(0,250,by=50)),
   scale_fill_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
   scale_color_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
-  labs(x="Median household income ($)", y=plotlabs[1], alpha=expression("Households (x10"^"3)")))
+  labs(x="Median household income ($)", y=plotlabs[1], alpha=expression("Households (x10"^"3)")),
+  guides(fill = "none", color = "none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
 
-b2 <- ggplot(filter(df_p), aes(x=var_bin/1000, weight=tothh_Cpoly)) + plotops #+
-  #scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
+e2 <- ggplot(filter(df_p), aes(x=var_bin/1000, weight=tothh_Cpoly)) + plotops
 
-print(b2)
+print(e2)
 
-ggsave("demo_inc_medhhinc_2.png", b2, path="figures/lowesscomb/", width=8, height=5.5)
+ggsave("demo_inc_medhhinc_2.png", e2, path="figures/lowesscomb/", width=8, height=5.5)
 ```
 
-Lowess plots - CalEnviroScreen
+Plot F1/F2 - CalEnviroScreen features - Pollution/Population
 
 ```{r}
 df_p <- rbind(mutate(read.csv(paste0("figures/lowessci/",featscales[28,"f_cat"],featscales[28,"feature"],"_lfit.csv"), 
@@ -402,22 +490,22 @@ df_p <- rbind(mutate(read.csv(paste0("figures/lowessci/",featscales[28,"f_cat"],
   mutate(feature = ifelse(feature=="polenvt_pctl","Environment","Exposure"))
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)),
   scale_shape_manual(values=c(21,22)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
+  scale_x_continuous(breaks=seq(0,100,by=20)),
   scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
-  labs(x="CalEnviroScreen pollution indicator (percentile)", y=plotlabs[1], fill="Pollution burden", color="Pollution burden", shape="Pollution burden", alpha=expression("Households (x10"^"3)")))
+  labs(x="CalEnviroScreen pollution indicator (percentile)", y=plotlabs[1], fill="Pollution burden", color="Pollution burden", shape="Pollution burden", alpha=expression("Households (x10"^"3)")),
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE), shape = guide_legend(nrow = 1, byrow = TRUE), alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
 
-c1 <- ggplot(filter(df_p), aes(x=var_bin, weight=tothh_Cpoly)) + plotops #+ 
-  #scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
+f1 <- ggplot(filter(df_p), aes(x=var_bin, weight=tothh_Cpoly)) + plotops
+print(f1)
 
-print(c1)
-
-ggsave("demo_ces_all_pollution.png", c1, path="figures/lowesscomb/", width=8, height=6.5)
+ggsave("demo_ces_all_pollution.png", f1, path="figures/lowesscomb/", width=8, height=6.5)
 
 
 df_p <- rbind(mutate(read.csv(paste0("figures/lowessci/",featscales[30,"f_cat"],featscales[30,"feature"],"_lfit.csv"), 
@@ -429,79 +517,115 @@ df_p <- rbind(mutate(read.csv(paste0("figures/lowessci/",featscales[30,"f_cat"],
   mutate(feature = ifelse(feature=="popsens_pctl","Sensitive populations","Ling. isolation"))
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)),
   scale_shape_manual(values=c(21,22)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
+  scale_x_continuous(breaks=seq(0,100,by=20)), 
   scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
-  labs(x="CalEnviroScreen population indicator (percentile)", y=plotlabs[1], fill="Population indicator", color="Population indicator", shape="Population indicator", alpha=expression("Households (x10"^"3)")))
+  labs(x="CalEnviroScreen population indicator (percentile)", y=plotlabs[1], fill="Population indicator", color="Population indicator", shape="Population indicator", alpha=expression("Households (x10"^"3)")),
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE), shape = guide_legend(nrow = 1, byrow = TRUE), alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
 
-c2 <- ggplot(filter(df_p), aes(x=var_bin, weight=tothh_Cpoly)) + plotops #+ 
-  #scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
 
-print(c2)
+f2 <- ggplot(filter(df_p), aes(x=var_bin, weight=tothh_Cpoly)) + plotops
 
-ggsave("demo_ces_all_population.png", c2, path="figures/lowesscomb/", width=8, height=5.5)
+print(f2)
+
+ggsave("demo_ces_all_population.png", f2, path="figures/lowesscomb/", width=8, height=5.5)
 ```
 
-Lowess plots - housing types
+Combine figures - Figure n°XX
+```{r}
+plot_grid(a, b, c, d, e1, e2, f1, f2, nrow=4, ncol=2, scale=0.95, labels=c('a','b','c','d','e','f', 'g', 'h'), label_size=15)
+
+ggsave("figures/lowesscomb/all_features_loess.png", width=16, height=20)
+```
+
+Plot G - Housing - Median year built
 
 ```{r}
-df_p <- rbind(mutate(read.csv(paste0("figures/lowessci/",featscales[21,"f_cat"],featscales[21,"feature"],"_lfit.csv"), 
-                                    header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
-                           feature=featscales[21,"feature"]), 
-              mutate(read.csv(paste0("figures/lowessci/",featscales[22,"f_cat"],featscales[22,"feature"],"_lfit.csv"), 
-                                    header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
-                           feature=featscales[22,"feature"])) %>%
-  mutate(feature = ifelse(feature=="singleunit_pct", "Single-unit", "Owner-occupied"))
-
-plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()),
-  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
-  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
-  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
-  geom_line(aes(y=lfit, color=feature)),
-  scale_shape_manual(values=c(21,22)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
-  scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
-  labs(x="Households (%)", y=plotlabs[1], fill="Feature", color="Feature", shape="Feature", alpha=expression("Households (x10"^"3)")))
-
-d1 <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops #+ 
-  #scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
-
-print(d1)
-ggsave("demo_hs_all.png", d1, path="figures/lowesscomb/", width=8, height=5.5)
-
 df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[24,"f_cat"],featscales[24,"feature"],"_lfit.csv"), 
                               header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
                      feature=featscales[24,"feature"])
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()), guides(color=FALSE, fill=FALSE),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)), scale_x_continuous(breaks=seq(1940,2010,by=20)),
   scale_fill_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])), 
   scale_color_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])), 
-  labs(x="Median year built", y=plotlabs[1], alpha=expression("Households (x10"^"3)")))
+  labs(x="Median year built", y=plotlabs[1], alpha=expression("Households (x10"^"3)")),
+  guides(fill = "none", color = "none", shape="none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
 
-d2 <- ggplot(filter(df_p), aes(x=var_bin, weight=tothh_Cpoly)) + plotops #+ 
-  #scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
+g <- ggplot(filter(df_p), aes(x=var_bin, weight=tothh_Cpoly)) + plotops
 
-print(d2)
-ggsave("demo_hs_medyrbuilt_2.png", d2, path="figures/lowesscomb/", width=8, height=5.5)
+print(g)
+ggsave("demo_hs_medyrbuilt_2.png", g, path="figures/lowesscomb/", width=8, height=5.5)
 ```
+
+Plot H - Housing - Owner occupant 
+
+```{r}
+df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[21,"f_cat"],featscales[21,"feature"],"_lfit.csv"), 
+                                    header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
+                           feature=featscales[21,"feature"])
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
+  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
+  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
+  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
+  geom_line(aes(y=lfit, color=feature)),
+  scale_shape_manual(values=c(21,22)),
+  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
+  scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
+  labs(x="Households (%)", y=plotlabs[1], fill="Feature", color="Feature", shape="Feature", alpha=expression("Households (x10"^"3)")),
+  guides(fill = "none", color = "none", shape="none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
+
+h <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops
+
+print(h)
+ggsave("demo_hs_ownerocc_pct_2.png", h, path="figures/lowesscomb/", width=8, height=5.5)
+```
+Plot J - Housing - Average number of units in residential buildings 
+
+```{r}
+df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[23,"f_cat"],featscales[23,"feature"],"_lfit.csv"), 
+                              header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
+                     feature=featscales[23,"feature"])
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
+  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
+  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
+  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
+  geom_line(aes(y=lfit, color=feature)), scale_x_continuous(breaks=seq(0,25,by=5)),
+  scale_fill_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])), 
+  scale_color_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])), 
+  labs(x="Average number of units in residential buildings", y=plotlabs[1], alpha=expression("Households (x10"^"3)")),
+  guides(fill = "none", color = "none", shape="none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
+
+j <- ggplot(filter(df_p), aes(x=var_bin, weight=tothh_Cpoly)) + plotops
+
+print(j)
+ggsave("demo_hs_unitsavg_2.png", j, path="figures/lowesscomb/", width=8, height=5.5)
+```
+
 
 Combined Figure
 
 ```{r}
 plot_grid(b1, b2, c1, c2, d1, d2, nrow=3, ncol=2, scale=0.95, labels=c('a','b','c','d','e','f'), label_size=12)
 
-ggsave("figures/lowesscomb/demo_cesinchs.png", width=16, height=20)
+# ggsave("figures/lowesscomb/demo_cesinchs.png", width=16, height=20)
 # ggsave("figures/lowesscomb/demo_cesinchs.pdf", width=16, height=20)
 
 ```
@@ -575,13 +699,16 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
   scale_color_manual(values=feature_colors),
   scale_fill_manual(values=feature_colors),
-  labs(x="Households (%)", y=plotlabs[1], fill="Type of housing", color="Type of housing", shape="Type of housing", alpha=expression("Households (x10"^"3)")))
+  labs(x="Households (%)", y=plotlabs[1], fill="Type of housing", color="Type of housing", shape="Type of housing", alpha=expression("Households (x10"^"3)")),
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE), shape=guide_legend(nrow = 1, byrow = TRUE), alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
 
-e <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops +
+i <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops +
    scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
 
-ggsave("demo_housing_types_v2.png", e, path="figures/lowesscomb/", width=10, height=6.5)
+ggsave("demo_housing_types_v2.png", i, path="figures/lowesscomb/", width=10, height=6.5)
 
-print(e)
+print(i)
 ```
 
