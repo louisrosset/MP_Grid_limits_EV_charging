@@ -3,6 +3,8 @@ title: "07_regression_plot"
 output: html_document
 ---
 
+This code generates plots of the results produced by the Python notebook 'Regression.ipynb' and calculates the interactions between all variables using iterative random forest (iRF) models
+
 
 ```{r}
 library(tidyverse)

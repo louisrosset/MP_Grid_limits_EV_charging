@@ -3,7 +3,7 @@ title: "06_analysis"
 output: html_document
 ---
 
-This file analyzes the relationships between different demographic features and hosting capacity
+This file analyzes the relationships among various service, infrastructure, and demographic characteristics in relation to the hosting capacity.
 
 ```{r}
 library(Hmisc)

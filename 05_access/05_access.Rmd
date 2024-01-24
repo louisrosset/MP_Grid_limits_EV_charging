@@ -3,7 +3,7 @@ title: "05_access"
 output: html_document
 ---
 
-This code calculates overall grid access for households in PG&E and SCE service territories, considering housing types.
+This code calculates overall grid access for households in PG&E and SCE service territories, considering residential building sizes.
 
 ```{r}
 library(tidyverse)

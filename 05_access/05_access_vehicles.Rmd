@@ -3,7 +3,7 @@ title: "05_access_vehicles"
 output: html_document
 ---
 
-This notebook calculates grid access for vehicles in PG&E and SCE service territories.
+This notebook calculates grid access for vehicles in PG&E and SCE service territories, considering the residential building sizes.
 
 ```{r}
 library(tidyverse)
