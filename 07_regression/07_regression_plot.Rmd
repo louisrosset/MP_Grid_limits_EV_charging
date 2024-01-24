@@ -12,7 +12,7 @@ library(cowplot)
 library(grid)
 library(gridExtra)
 library(colorspace)
-# library(iRF)
+library(iRF)
 
 text_y_imp <- textGrob("Importance (%)", 
                        gp = gpar(fontsize = 10, fontface = "bold"), 
@@ -331,7 +331,7 @@ PGE_all_df = select(PGE_realdata, c(all_of(col), all_of(allf)))
 SCE_all_df <- SCE_all_df %>% filter(!is.na(ICL_kWphh_cap))
 PGE_all_df <- PGE_all_df %>% filter(!is.na(ICL_kWphh_cap))
 
-SCE_all_df_na <- rfImpute(ICL_kWphh_cap ~ ., SCE_all_df)
+# SCE_all_df_na <- rfImpute(ICL_kWphh_cap ~ ., SCE_all_df)
 ```
 
 ```{r}
@@ -340,8 +340,8 @@ PGE_all_df <- na.omit(PGE_all_df)
 ```
 
 ```{r}
-SCE_all_irf <- iRF(x = SCE_all_df[, !(names(SCE_all_df) %in% "ICL_kWphh_cap")], y = SCE_all_df$ICL_kWphh_cap, na.action = na.roughfix, weights = SCE_all_df$tothh_Cpoly, interactions.return = TRUE)
-# PGE_all_irf <- iRF(x = PGE_all_df[, !(names(PGE_all_df) %in% "ICL_kWphh_cap")], y = PGE_all_df$ICL_kWphh_cap, weights = PGE_all_df$tothh_Cpoly, interactions.return = TRUE)
+# SCE_all_irf <- iRF(x = SCE_all_df[, !(names(SCE_all_df) %in% "ICL_kWphh_cap")], y = SCE_all_df$ICL_kWphh_cap, na.action = na.roughfix, weights = SCE_all_df$tothh_Cpoly, interactions.return = TRUE)
+PGE_all_irf <- iRF(x = PGE_all_df[, !(names(PGE_all_df) %in% "ICL_kWphh_cap")], y = PGE_all_df$ICL_kWphh_cap, weights = PGE_all_df$tothh_Cpoly, interactions.return = TRUE)
 ```
 
 ```{r}
@@ -375,4 +375,5 @@ ggsave("Top_Interactions.png", c, path="figures_eval/", width=12, height=7.5)
 ```{r}
 stabilityScore(x = PGE_all_df[, !(names(PGE_all_df) %in% "ICL_kWphh_cap")], y = PGE_all_df$ICL_kWphh_cap, weights = PGE_all_df$tothh_Cpoly)
 ```
+
 

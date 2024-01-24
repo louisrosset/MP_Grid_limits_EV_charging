@@ -80,7 +80,7 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   scale_y_continuous(limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1), labels=scales::percent_format(accuracy=1)),
   scale_x_continuous(breaks=c(0,as.numeric(at)), labels=c(">0", "1", "1.5","2","3","4","5","6","7","8","9","10")),
   scale_color_discrete_sequential(palette="Viridis", nmax=8, order=8:1),
-  labs(x="Access threshold (kW)", y="Portion of households with access", color="Housing size"))
+  labs(x="Access threshold (kW)", y="Portion of households with access", color="Residential building size"))
 ```
 
 ACCESS
@@ -178,7 +178,7 @@ lf <- lf %>%
 a <- ggplot(filter(lf), aes(x=threshold)) + plotops
 print(a)
 
-ggsave("figures/access/IOU_access_housing_size.png", a, width=8, height=5.5)
+ggsave("figures/access/IOU_access_housing_size.png", a, width=8, height=4.5)
 ```
 
 

@@ -654,7 +654,7 @@ df_plot$Housing <- recode(factor(df_plot$Housing, levels = c(
 
 df_plot$Scenario <- recode(factor(df_plot$Scenario, levels = c(
   "sc1", "sc2", "sc3", "sc4")),
-  "sc1"= "Indiv. access (1.5kW)", "sc2"= "Indiv. access (7.0kW)", "sc3"= "Shared access", "sc4" = "Mixed"
+  "sc1"= "1 - Indiv. access (1.5kW)", "sc2"= "2 - Indiv. access (7.0kW)", "sc3"= "3 - Shared access", "sc4" = "4 - Mixed"
 )
 
 df_plot$Load <- recode(factor(df_plot$Load, levels = c(
@@ -681,9 +681,31 @@ plot_access <- ggplot(df_plot_access, aes(x = Housing, y = pct, color = Scenario
     axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1), labels = scales::percent_format(accuracy = 1))
 
-ggsave("figures/scenarios/PGE_access_scenarios_access.png", plot_access, width = 5.5, height = 5.5)
+ggsave("figures/scenarios/PGE_access_scenarios_access.png", plot_access, width = 6, height = 4)
 print(plot_access)
 ```
+```{r}
+sc1_load = sum(IOU_wacc_sc1$sc1_veh_load, na.rm = TRUE)
+sc2_load = sum(IOU_wacc_sc2$sc2_veh_load, na.rm = TRUE)
+sc3_load = sum(IOU_wacc_sc3$sc3_veh_load, na.rm = TRUE)
+sc4_load = sum(IOU_wacc_sc4$sc4_veh_load, na.rm = TRUE)
+
+tot_veh = sum(IOU_wacc$totveh_Cpoly, na.rm = TRUE)
+tot_hh = sum(IOU_wacc$tothh_Cpoly, na.rm = TRUE)
+
+sc1_load_veh = sc1_load/tot_veh
+sc1_load_hh = sc1_load/tot_hh
+
+sc2_load_veh = sc2_load/tot_veh
+sc2_load_hh = sc2_load/tot_hh
+
+sc3_load_veh = sc3_load/tot_veh
+sc3_load_hh = sc3_load/tot_hh
+
+sc4_load_veh = sc4_load/tot_veh
+sc4_load_hh = sc4_load/tot_hh
+```
+
 
 ```{r}
 #Plot - Both access and no access

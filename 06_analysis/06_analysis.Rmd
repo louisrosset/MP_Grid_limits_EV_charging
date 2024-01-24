@@ -582,9 +582,10 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)),
   scale_shape_manual(values=c(21,22)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
-  scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
-  labs(x="Households (%)", y=plotlabs[1], fill="Feature", color="Feature", shape="Feature", alpha=expression("Households (x10"^"3)")),
+  scale_x_continuous(breaks=seq(0,100,by=20)),
+  scale_fill_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])), 
+  scale_color_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
+  labs(x="Owner-occupied households (%)", y=plotlabs[1], fill="Feature", color="Feature", shape="Feature", alpha=expression("Households (x10"^"3)")),
   guides(fill = "none", color = "none", shape="none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
   theme(legend.position="top", legend.box = "horizontal")
   )
@@ -619,54 +620,7 @@ print(j)
 ggsave("demo_hs_unitsavg_2.png", j, path="figures/lowesscomb/", width=8, height=5.5)
 ```
 
-
-Combined Figure
-
-```{r}
-plot_grid(b1, b2, c1, c2, d1, d2, nrow=3, ncol=2, scale=0.95, labels=c('a','b','c','d','e','f'), label_size=12)
-
-# ggsave("figures/lowesscomb/demo_cesinchs.png", width=16, height=20)
-# ggsave("figures/lowesscomb/demo_cesinchs.pdf", width=16, height=20)
-
-```
-
-
-Lowess plots - housing types (plot n°1)
-
-```{r}
-df_p <- read.csv(paste0("figures/lowessci/",featscales[22,"f_cat"],featscales[22,"feature"],"_lfit.csv"),
-                 header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))) %>% mutate(feature=featscales[22,"feature"])
-
-for (i in 32:35){
-df_p <- rbind(df_p, mutate(read.csv(paste0("figures/lowessci/",featscales[i,"f_cat"],featscales[i,"feature"],"_lfit.csv"), 
-                                    header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
-                           feature=featscales[i,"feature"]))
-}
-
-df_p <- df_p %>%
-  mutate(feature = recode(factor(feature, levels=c("singleunit_pct","duplex_pct","smallmulti_pct","largemulti_pct","MUD_pct")),
-                          'singleunit_pct'="Single Unit", 'duplex_pct'="Duplex", 'smallmulti_pct'="Small MUD",
-                          'largemulti_pct'="Large MUD", 'MUD_pct'="MUD (including duplex)"))
-
-plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme( axis.title=element_blank()),
-  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
-  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
-  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
-  geom_line(aes(y=lfit, color=feature)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
-  scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
-  labs(x="Type of housing (%)", y=plotlabs[1], fill="Type of housing", color="Type of housing", shape="Type of housing", alpha=expression("Households (x10"^"3)")))
-
-e <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops +
-   scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
-
-ggsave("demo_housing_types_v1.png", e, path="figures/lowesscomb/", width=8, height=6.5)
-
-print(e)
-```
-
-Lowess plots - housing types (plot n°2)
+Plot I - Housing - Type of housing 
 
 ```{r}
 df_p <- read.csv(paste0("figures/lowessci/",featscales[22,"f_cat"],featscales[22,"feature"],"_lfit.csv"),
@@ -694,21 +648,67 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   # theme( axis.title=element_blank()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
-  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
+  # geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
+  scale_x_continuous(breaks=seq(0,100,by=20)),
   scale_color_manual(values=feature_colors),
   scale_fill_manual(values=feature_colors),
-  labs(x="Households (%)", y=plotlabs[1], fill="Type of housing", color="Type of housing", shape="Type of housing", alpha=expression("Households (x10"^"3)")),
-  guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE), shape=guide_legend(nrow = 1, byrow = TRUE), alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  labs(x="Households (%)", y=plotlabs[1], fill="Type of housing", color="Type of housing", alpha=expression("Households (x10"^"3)")),
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE), alpha = guide_legend(nrow = 1, byrow = TRUE)),
   theme(legend.position="top", legend.box = "horizontal")
   )
 
 i <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops +
    scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
 
-ggsave("demo_housing_types_v2.png", i, path="figures/lowesscomb/", width=10, height=6.5)
+ggsave("demo_housing_types_v2.png", i, path="figures/lowesscomb/", width=8, height=5.5)
 
 print(i)
 ```
+
+Combine figures - Figure n°XX
+
+```{r}
+plot_grid(g, h, i, j, nrow=2, ncol=2, scale=0.95, labels=c('a','b','c','d'), label_size=15)
+
+ggsave("figures/lowesscomb/all_demo_hs.png", width=16, height=10)
+```
+
+
+Extra plot - housing types
+
+```{r}
+df_p <- read.csv(paste0("figures/lowessci/",featscales[22,"f_cat"],featscales[22,"feature"],"_lfit.csv"),
+                 header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))) %>% mutate(feature=featscales[22,"feature"])
+
+for (i in 32:35){
+df_p <- rbind(df_p, mutate(read.csv(paste0("figures/lowessci/",featscales[i,"f_cat"],featscales[i,"feature"],"_lfit.csv"), 
+                                    header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
+                           feature=featscales[i,"feature"]))
+}
+
+df_p <- df_p %>%
+  mutate(feature = recode(factor(feature, levels=c("singleunit_pct","duplex_pct","smallmulti_pct","largemulti_pct","MUD_pct")),
+                          'singleunit_pct'="Single Unit", 'duplex_pct'="Duplex", 'smallmulti_pct'="Small MUD",
+                          'largemulti_pct'="Large MUD", 'MUD_pct'="MUD (including duplex)"))
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
+  # theme( axis.title=element_blank()),
+  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
+  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
+  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
+  geom_line(aes(y=lfit, color=feature)),
+  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
+  scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
+  labs(x="Type of housing (%)", y=plotlabs[1], fill="Type of housing", color="Type of housing", shape="Type of housing", alpha=expression("Households (x10"^"3)")))
+
+k <- ggplot(filter(df_p), aes(x=var_bin*100, weight=tothh_Cpoly)) + plotops +
+   scale_y_continuous(breaks=seq(0,4,1)) + coord_cartesian(ylim=c(0,4))
+
+ggsave("demo_housing_types_v1.png", k, path="figures/lowesscomb/", width=8, height=6.5)
+
+print(k)
+```
+
+
 

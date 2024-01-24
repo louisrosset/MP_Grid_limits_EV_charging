@@ -7,17 +7,12 @@ This code assembles and cleans features to be used in random forest runs.
 
 ```{r}
 library(tidyverse)
-library(tictoc)
 library(reshape2)
 library(ggplot2)
-library(ggridges)
 library(stringr)
-library(tidytext)
 library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
-library(readxl)
 library(colorspace)
 library(Hmisc)
-#library(facetscales)
 ```
 
 
@@ -244,7 +239,7 @@ Visualizations
 ```{r}
 demof = c("medhhinc","inc50kbelow_pct","inc150kplus_pct","racediversity",
           "nlxwhite_pct","black_pct","latinx_pct","asian_pct",
-          "ownerocc_pct","singleunit_pct","unitsavg","medyrbuilt",
+          "ownerocc_pct","singleunit_pct", "MUD_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct", "unitsavg","medyrbuilt",
           "polexposure_pctl","polenvt_pctl","popsens_pctl","lingisolation_pctl",
           "edavgyrs","tothh","hhdensity_hhsqkm" )
 

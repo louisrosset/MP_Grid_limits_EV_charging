@@ -628,7 +628,7 @@ df_plot$Housing <- recode(factor(df_plot$Housing, levels = c(
 
 df_plot$Scenario <- recode(factor(df_plot$Scenario, levels = c(
   "sc1", "sc2", "sc3", "sc4")),
-  "sc1"= "Indiv. access (1.5kW)", "sc2"= "Indiv. access (7.0kW)", "sc3"= "Shared access", "sc4" = "Mixed"
+  "sc1"= "1 - Indiv. access (1.5kW)", "sc2"= "2 - Indiv. access (7.0kW)", "sc3"= "3 - Shared access", "sc4" = "4 - Mixed"
 )
 
 df_plot$Load <- recode(factor(df_plot$Load, levels = c(
