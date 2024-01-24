@@ -6,6 +6,7 @@ Berkeley, February 2024
 - Gathers demographic information for census block groups in California.
 - Census data, downloaded through the Census Bureau, are from the "American Community Survey, ACS 5-Year Estimates"
 - CalEnviroScreen data are from CalEnviroScreeen 4.0 results
+- Output: bgCAcensusCES.csv
 
 #### 02_cpolys.Rmd
 - Pulls in circuit polygon data (outputs from ArcGIS) and analyzes outcomes of spatial processing
