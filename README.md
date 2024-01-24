@@ -16,7 +16,7 @@ Berkeley, February 2024
 - Outputs: PGE_all.csv, PGE_ICAall.csv, PGE_ICAallreal.csv, SCE_ICAall.csv, SCE_ICAallreal.csv
 
 #### 03_features.Rmd
-- Assembles and cleans features to be used in random forest and linear and logistic regression runs
+- Assembles and cleans features to be used in regression runs
 - Inputs: PGE_all.csv, PGE_ICAall.csv, SCE_ICAall.csv, bgCAcensusCES.csv
 - Outputs: PGE_ICAalldemo.csv, PGE_ICAalldemoreal.csv, SCE_ICAalldemo.csv, SCE_ICAalldemoreal.csv
 
