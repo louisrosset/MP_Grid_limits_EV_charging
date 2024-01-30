@@ -90,7 +90,7 @@ We calculate the number of households with access based on grid limits.
 SCE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
 PGE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(PGE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
 
-for (t in 1:length(at)) { 
+for (t in 1:length(at)) {
   name <- paste0("hhwacc_",at[t],"_ICL_pct") 
   
   SCE_ICAaccess[[name]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>=as.numeric(at[t]), 1, SCE_ICAaccess[["ICL_kWphh"]]/as.numeric(at[t]))

@@ -195,7 +195,7 @@ colnames(bgCAcensusCES)[colnames(bgCAcensusCES) == "GEOID10"] <- "GEOID"
 demofeatures = c("GEOID", "GEOIDCT", "inc50kbelow_pct", "inc150kplus_pct", "medhhinc",
                  "racediversity", "black_pct", "asian_pct", "nlxwhite_pct", "latinx_pct", 
                  "edavgyrs", "ownerocc_pct", "singleunit_pct", "MUD_pct", "duplex_pct",
-                 "smallmulti_pct", "largemulti_pct", "unitsavg", "medyrbuilt", 
+                 "smallmulti_pct", "largemulti_pct", "unitsavg", "medyrbuilt", "popvar", 
                  "polexposure_pctl", "polenvt_pctl", "popsens_pctl", "lingisolation_pctl")
 
 SCE_ICAalldemo <- SCE_ICAalldemo %>% merge(bgCAcensusCES[, demofeatures], by="GEOID", all.x=TRUE) %>% unique()
@@ -239,7 +239,8 @@ Visualizations
 ```{r}
 demof = c("medhhinc","inc50kbelow_pct","inc150kplus_pct","racediversity",
           "nlxwhite_pct","black_pct","latinx_pct","asian_pct",
-          "ownerocc_pct","singleunit_pct", "MUD_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct", "unitsavg","medyrbuilt",
+          "ownerocc_pct","singleunit_pct", "MUD_pct", "duplex_pct",
+          "smallmulti_pct", "largemulti_pct", "unitsavg","medyrbuilt", "popvar",
           "polexposure_pctl","polenvt_pctl","popsens_pctl","lingisolation_pctl",
           "edavgyrs","tothh","hhdensity_hhsqkm" )
 

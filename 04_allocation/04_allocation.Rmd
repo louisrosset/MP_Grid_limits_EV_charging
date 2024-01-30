@@ -291,7 +291,7 @@ servgeofeatures = c("ResCust","Res_pct","Com_pct","Ind_pct","Agr_pct","Oth_pct",
 demofeatures = c("tothh", "racediversity", "black_pct", "asian_pct", "nlxwhite_pct", "latinx_pct", 
                  "inc50kbelow_pct", "inc150kplus_pct", "medhhinc", "edavgyrs", 
                  "ownerocc_pct", "singleunit_pct", "MUD_pct", "duplex_pct", "smallmulti_pct",
-                 "largemulti_pct", "unitsavg", "medyrbuilt", "hhdensity_hhsqkm",
+                 "largemulti_pct", "unitsavg", "medyrbuilt", "popvar", "hhdensity_hhsqkm",
                  "polexposure_pctl", "polenvt_pctl", "popsens_pctl", "lingisolation_pctl")
 
 #SCE

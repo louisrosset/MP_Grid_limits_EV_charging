@@ -239,6 +239,18 @@ ACS_2021_bg_medyrbuilt$GEOID10 <- substring(ACS_2021_bg_medyrbuilt$GEOID10, 2)
 
 ```
 
+-----------------------
+Estimated percent change in the number of people between the periods of 2012-2016 and 2017-2021.
+```{r}
+# POPULATION CHANGE
+ACS_2021_bg_popvar = read.csv("Population/ACS_2021_bg_popvar.csv", header=T, sep = ",", na.strings="null", colClasses=c(rep("character",10)))
+colnames(ACS_2021_bg_popvar) <- c("Blockgroup", "GEOID", "State", "GEOID10", "GEOID_form", "popvar", "TimeFrame", "Year", "Source", "Location")
+ACS_2021_bg_popvar <- ACS_2021_bg_popvar[, c("GEOID10", "popvar")]
+ACS_2021_bg_popvar[,"popvar"] <- as.numeric(ACS_2021_bg_popvar[,"popvar"])
+
+ACS_2021_bg_popvar$GEOID10 <- substring(ACS_2021_bg_popvar$GEOID10, 2)
+```
+
 ------------------------------------------------------------------------
 
 CENSUS BLOCK GROUPS: AGGREGATING CENSUS DATA
@@ -247,7 +259,6 @@ CENSUS BLOCK GROUPS: AGGREGATING CENSUS DATA
 
 ```{r}
 geomatch = c("GEOid_bg", "GEOID10", "bgcountystate")
-
 
 bg_demo <- ACS_2021_bg_hhinc[ , c(geomatch, "GEOIDCT", "tothh", "inc50kbelow_pct", "inc150kplus_pct")]
 
@@ -263,7 +274,8 @@ bg_demo <- bg_demo %>% # HOUSEHOLD-LEVEL METRICS, tothh from income data
         by=geomatch, all.x=TRUE) %>% # STRUCTURE-LEVEL METRICS, totstr from unit data
   merge(ACS_2021_bg_yrbuilt[, c(geomatch, "yr2000post_pct", "yr1980to1999_pct", "yr1960to1979_pct", "yr1959pre_pct")], 
         by=geomatch, all.x=TRUE) %>% # years built
-  merge(ACS_2021_bg_medyrbuilt[, c(geomatch, "medyrbuilt")], by=geomatch, all.x=TRUE) # median year built
+  merge(ACS_2021_bg_medyrbuilt[, c(geomatch, "medyrbuilt")], by=geomatch, all.x=TRUE) %>% # median year built
+  merge(ACS_2021_bg_popvar[, c("GEOID10", "popvar")], by= "GEOID10", all.x=TRUE) # Population change
 ```
 
 ```{r}

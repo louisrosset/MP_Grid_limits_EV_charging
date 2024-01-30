@@ -101,13 +101,21 @@ featscales <- rbind(featscales,
                                         "Sensitive population (percentile)", "Linguistic isolation (percentile)"),
                                f_cat=c("demo_ces_","demo_ces_","demo_ces_","demo_ces_")))
 
-###NEW FEATURES SCALES - HOUSING TYPES###
+###HOUSING TYPES###
 featscales <- rbind(featscales,
                      data.frame(feature=c("MUD_pct", "duplex_pct", "smallmulti_pct", "largemulti_pct"),
                                f_min=c(0,0,0,0), f_max=c(1,1,1,1), f_cap=c(1,1,1,1),
                                f_binwidth=c(.05,.05,.05,.05), f_div=c(.01,.01,.01,.01), y_liml=c(0,0,0,0), y_limh=c(12,12,12,12),
                                f_xlab=c("Multi-unit residential housing (%)", "Duplex housing (%)", "Small Multi-unit housing (%)", "Large Multi-unit housing (%)"),
                                f_cat=c("demo_hs_", "demo_hs_", "demo_hs_", "demo_hs_")))
+
+###POPULATION CHANGE###
+featscales <- rbind(featscales,
+                     data.frame(feature=c("popvar"),
+                               f_min=c(-80), f_max=c(1200), f_cap=c(80),
+                               f_binwidth=c(10), f_div=c(1), y_liml=c(5000), y_limh=c(5000),
+                               f_xlab=c("Population change between 2012-2016 and 2017-2021 (%)"),
+                               f_cat=c("demo_")))
 ###-------------------###
 
 featscales <- featscales %>%
@@ -126,7 +134,7 @@ Calculating optimal span parameters for loess plots
 --------------------------------------------------------------------------------------------
 
 ```{r}
-for (i in 1:35){ #from 1 to 31: normal features // from 32 to 35: extra housing features
+for (i in 36:36){ #from 1 to 31: features // from 32 to 35: other housing features // 36: population change
   df = rbind(select(PGE_ICAalldemo, c(cols, featscales[i,"feature"])), select(SCE_ICAalldemo, c(cols, featscales[i,"feature"]))) 
   df = df[which(!is.na(df[[featscales[i,"feature"]]])),]
   df$var_bin = as.numeric(as.character(cut(df[[featscales[i,"feature"]]], 
@@ -160,7 +168,7 @@ Calculating confidence intervals via bootstrapped loess
   
 ```{r}
 tic()
-for (i in 1:35){ #from 1 to 31: normal features // from 32 to 35: extra housing features
+for (i in 36:36){ #from 1 to 31: normal features // from 32 to 35: extra housing features // 36: population change
 
 df = rbind(select(PGE_ICAalldemo, c(cols, featscales[i,"feature"])), select(SCE_ICAalldemo, c(cols, featscales[i,"feature"]))) 
   df = df[which(!is.na(df[[featscales[i,"feature"]]])),]
@@ -273,7 +281,7 @@ plotlabs = c("Median hosting capacity (kW/hh) per bin","Households (1000s)")
 
 #https://stackoverflow.com/questions/38925604/setting-a-unique-span-parameter-for-each-geom-smooth-on-a-multi-facet-ggplot
 
-for(i in 32:35){ #from 1 to 31: normal features // from 32 to 35: extra housing features
+for(i in 36:36){ #from 1 to 31: normal features // from 32 to 35: extra housing features // 36: population change
 
 df_p <- read.csv(paste0("figures/lowessci/", featscales[i, "f_cat"], featscales[i, "feature"], "_lfit.csv"),
                  header = TRUE, 
@@ -709,6 +717,29 @@ ggsave("demo_housing_types_v1.png", k, path="figures/lowesscomb/", width=8, heig
 
 print(k)
 ```
+Plot K - Demoraphic - Population change between 2012-2016 and 2017-2021 
 
+```{r}
+df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[36,"f_cat"],featscales[36,"feature"],"_lfit.csv"), 
+                              header=T, na.strings="?", colClasses=c(rep("factor",1),rep("numeric",22))),
+                     feature=featscales[36,"feature"])
+
+plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
+  geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
+  geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
+  geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
+  geom_line(aes(y=lfit, color=feature)), scale_x_continuous(breaks=seq(-80,80,by=20)),
+  scale_fill_manual(values=c(qualitative_hcl(3,palette="Dark3")[3])), 
+  scale_color_manual(values=c(qualitative_hcl(3,palette="Dark3")[3])), 
+  labs(x="Estimated change in the population between the periods 2012-2016 and 2017-2021 (%)", y=plotlabs[1], alpha=expression("Households (x10"^"3)")),
+  guides(fill = "none", color = "none", shape="none", alpha = guide_legend(nrow = 1, byrow = TRUE)),
+  theme(legend.position="top", legend.box = "horizontal")
+  )
+
+j <- ggplot(filter(df_p), aes(x=var_bin, weight=tothh_Cpoly)) + plotops
+
+print(j)
+ggsave("demo_popvar_2.png", j, path="figures/lowesscomb/", width=8, height=5.5)
+```
 
 

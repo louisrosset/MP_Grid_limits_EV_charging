@@ -60,6 +60,20 @@ ACS_bg_vehicles_hh <- ACS_bg_vehicles_hh %>%
   mutate(GEOID = as.character(GEOID),
          avgveh_hh = as.numeric(avgveh_hh))
 ```
+```{r}
+#We calculate the amount of households without access per capacity threshold
+plotops_csgrid = list(
+  theme_light(), facet_grid(IOU~scenario, scales="free_x", space='free_x'),
+  geom_boxplot(aes(), alpha=1, width=0.9),
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), legend.position="none"),
+  scale_y_continuous(breaks = seq(0, 7, by = 1)),
+  labs(x=element_blank(), y="Average deficit of capacity (kW/hh), by circuit segment"),
+  scale_fill_manual(values = c("1 - Indiv. access (1.5kW)" = "#7EE081", 
+                               "2 - Indiv. access (7kW)" = "#62A87C", 
+                               "3 - Shared access" = "#00487C", 
+                               "4 - Mixed" = "#F6F5AE"))
+)
+```
 
 ```{r}
 #Preparing data 
@@ -94,12 +108,9 @@ IOU_wacc <- merge(IOU_wacc, ACS_bg_vehicles_hh[, c("GEOID", "avgveh_hh")],
   mutate(sc1_veh_headroom = ICL_max_hhWt_nadj - sc1_veh_load) %>%
   mutate(sc1_vehwacc = ifelse(sc1_veh_headroom>=0, totveh_Cpoly, totveh_Cpoly*ICL_max_hhWt_nadj/sc1_veh_load))%>%
   mutate(sc1_hhwacc = ifelse(sc1_veh_headroom>=0, tothh_Cpoly, tothh_Cpoly*ICL_max_hhWt_nadj/sc1_veh_load)) %>%
-  mutate(sc1_hhnoacc150 = ifelse(sc1_veh_headroom >=-150 & sc1_veh_headroom<0, tothh_Cpoly*(1-ICL_max_hhWt_nadj/sc1_veh_load), 0))%>%
-  mutate(sc1_hhnoaccinf = ifelse(sc1_veh_headroom < -150, tothh_Cpoly*(1-ICL_max_hhWt_nadj/sc1_veh_load), 0))%>%
+  mutate(ICL_hhnoacc = -ifelse(sc1_veh_headroom<0, sc1_veh_headroom/tothh_Cpoly, 0)) %>%
   mutate(sc1_vehwacc_pct = sc1_vehwacc/totveh_Cpoly)%>%
   mutate(sc1_hhwacc_pct = sc1_hhwacc/tothh_Cpoly)%>%
-  mutate(sc1_hhnoacc150_pct = sc1_hhnoacc150/tothh_Cpoly)%>%
-  mutate(sc1_hhnoaccinf_pct = sc1_hhnoaccinf/tothh_Cpoly)%>%
   #vehicles with access
   mutate(sc1_vehwacc_SU = sc1_vehwacc_pct*totveh_SU_Cpoly)%>%
   mutate(sc1_vehwacc_duplex = sc1_vehwacc_pct*totveh_duplex_Cpoly)%>%
@@ -113,18 +124,7 @@ IOU_wacc <- merge(IOU_wacc, ACS_bg_vehicles_hh[, c("GEOID", "avgveh_hh")],
   mutate(sc1_hhwacc_small = sc1_hhwacc_pct*tothh_small_Cpoly)%>%
   mutate(sc1_hhwacc_large = sc1_hhwacc_pct*tothh_large_Cpoly)%>%
   mutate(sc1_hhwacc_MUD = sc1_hhwacc_pct*tothh_MUD_Cpoly)%>%
-  #households with no access - from -150kW to 0
-  mutate(sc1_hhnoacc150_SU = sc1_hhnoacc150_pct*tothh_SU_Cpoly)%>%
-  mutate(sc1_hhnoacc150_duplex = sc1_hhnoacc150_pct*tothh_duplex_Cpoly)%>%
-  mutate(sc1_hhnoacc150_small = sc1_hhnoacc150_pct*tothh_small_Cpoly)%>%
-  mutate(sc1_hhnoacc150_large = sc1_hhnoacc150_pct*tothh_large_Cpoly)%>%
-  mutate(sc1_hhnoacc150_MUD = sc1_hhnoacc150_pct*tothh_MUD_Cpoly)%>%
-  #households with no access - more than -150kW
-  mutate(sc1_hhnoaccinf_SU = sc1_hhnoaccinf_pct*tothh_SU_Cpoly)%>%
-  mutate(sc1_hhnoaccinf_duplex = sc1_hhnoaccinf_pct*tothh_duplex_Cpoly)%>%
-  mutate(sc1_hhnoaccinf_small = sc1_hhnoaccinf_pct*tothh_small_Cpoly)%>%
-  mutate(sc1_hhnoaccinf_large = sc1_hhnoaccinf_pct*tothh_large_Cpoly)%>%
-  mutate(sc1_hhnoaccinf_MUD = sc1_hhnoaccinf_pct*tothh_MUD_Cpoly)
+  mutate(scenario = "sc1")
 
 cat(" Scenario 1 - All households should have access to an individual level 1 (1.5 kW) charging facility.
 
@@ -147,12 +147,9 @@ cat(" Scenario 1 - All households should have access to an individual level 1 (1
   mutate(sc2_veh_headroom = ICL_max_hhWt_nadj - sc2_veh_load) %>%
   mutate(sc2_vehwacc = ifelse(sc2_veh_headroom>=0, totveh_Cpoly, totveh_Cpoly*ICL_max_hhWt_nadj/sc2_veh_load))%>%
   mutate(sc2_hhwacc = ifelse(sc2_veh_headroom>=0, tothh_Cpoly, tothh_Cpoly*ICL_max_hhWt_nadj/sc2_veh_load)) %>%
-  mutate(sc2_hhnoacc150 = ifelse(sc2_veh_headroom >=-150 & sc2_veh_headroom<0, tothh_Cpoly*(1-ICL_max_hhWt_nadj/sc2_veh_load), 0))%>%
-  mutate(sc2_hhnoaccinf = ifelse(sc2_veh_headroom < -150, tothh_Cpoly*(1-ICL_max_hhWt_nadj/sc2_veh_load), 0))%>%
+  mutate(ICL_hhnoacc = -ifelse(sc2_veh_headroom<0, sc2_veh_headroom/tothh_Cpoly, 0)) %>%
   mutate(sc2_vehwacc_pct = sc2_vehwacc/totveh_Cpoly)%>%
   mutate(sc2_hhwacc_pct = sc2_hhwacc/tothh_Cpoly)%>%
-  mutate(sc2_hhnoacc150_pct = sc2_hhnoacc150/tothh_Cpoly)%>%
-  mutate(sc2_hhnoaccinf_pct = sc2_hhnoaccinf/tothh_Cpoly)%>%
   #vehicles with access
   mutate(sc2_vehwacc_SU = sc2_vehwacc_pct*totveh_SU_Cpoly)%>%
   mutate(sc2_vehwacc_duplex = sc2_vehwacc_pct*totveh_duplex_Cpoly)%>%
@@ -166,18 +163,7 @@ cat(" Scenario 1 - All households should have access to an individual level 1 (1
   mutate(sc2_hhwacc_small = sc2_hhwacc_pct*tothh_small_Cpoly)%>%
   mutate(sc2_hhwacc_large = sc2_hhwacc_pct*tothh_large_Cpoly)%>%
   mutate(sc2_hhwacc_MUD = sc2_hhwacc_pct*tothh_MUD_Cpoly)%>%
-  #households with no access - from -150kW to 0
-  mutate(sc2_hhnoacc150_SU = sc2_hhnoacc150_pct*tothh_SU_Cpoly)%>%
-  mutate(sc2_hhnoacc150_duplex = sc2_hhnoacc150_pct*tothh_duplex_Cpoly)%>%
-  mutate(sc2_hhnoacc150_small = sc2_hhnoacc150_pct*tothh_small_Cpoly)%>%
-  mutate(sc2_hhnoacc150_large = sc2_hhnoacc150_pct*tothh_large_Cpoly)%>%
-  mutate(sc2_hhnoacc150_MUD = sc2_hhnoacc150_pct*tothh_MUD_Cpoly)%>%
-  #households with no access - more than -150kW
-  mutate(sc2_hhnoaccinf_SU = sc2_hhnoaccinf_pct*tothh_SU_Cpoly)%>%
-  mutate(sc2_hhnoaccinf_duplex = sc2_hhnoaccinf_pct*tothh_duplex_Cpoly)%>%
-  mutate(sc2_hhnoaccinf_small = sc2_hhnoaccinf_pct*tothh_small_Cpoly)%>%
-  mutate(sc2_hhnoaccinf_large = sc2_hhnoaccinf_pct*tothh_large_Cpoly)%>%
-  mutate(sc2_hhnoaccinf_MUD = sc2_hhnoaccinf_pct*tothh_MUD_Cpoly)
+  mutate(scenario = "sc2")
 
 cat(" Scenario 2 - All households should have access to an individual level 2 (7.0 kW) charging facility.
 
@@ -199,12 +185,9 @@ IOU_wacc_sc3 <- IOU_wacc %>%
   mutate(sc3_veh_headroom = ICL_max_hhWt_nadj - sc3_veh_load)%>%
   mutate(sc3_vehwacc = ifelse(sc3_veh_headroom>=0, totveh_Cpoly, totveh_Cpoly*ICL_max_hhWt_nadj/sc3_veh_load))%>%
   mutate(sc3_hhwacc = ifelse(sc3_veh_headroom>=0, tothh_Cpoly, tothh_Cpoly*ICL_max_hhWt_nadj/sc3_veh_load))%>%
-  mutate(sc3_hhnoacc150 = ifelse(sc3_veh_headroom >=-150 & sc3_veh_headroom<0, tothh_Cpoly*(1-ICL_max_hhWt_nadj/sc3_veh_load), 0))%>%
-  mutate(sc3_hhnoaccinf = ifelse(sc3_veh_headroom < -150, tothh_Cpoly*(1-ICL_max_hhWt_nadj/sc3_veh_load), 0))%>%
+  mutate(ICL_hhnoacc = -ifelse(sc3_veh_headroom<0, sc3_veh_headroom/tothh_Cpoly, 0)) %>%
   mutate(sc3_vehwacc_pct = sc3_vehwacc/totveh_Cpoly)%>%
   mutate(sc3_hhwacc_pct = sc3_hhwacc/tothh_Cpoly)%>%
-  mutate(sc3_hhnoacc150_pct = sc3_hhnoacc150/tothh_Cpoly)%>%
-  mutate(sc3_hhnoaccinf_pct = sc3_hhnoaccinf/tothh_Cpoly)%>%
   #for all type of housing
   #vehicles with access
   mutate(sc3_vehwacc_SU = sc3_vehwacc_pct*totveh_SU_Cpoly)%>%
@@ -218,18 +201,7 @@ IOU_wacc_sc3 <- IOU_wacc %>%
   mutate(sc3_hhwacc_small = sc3_hhwacc_pct*tothh_small_Cpoly)%>%
   mutate(sc3_hhwacc_large = sc3_hhwacc_pct*tothh_large_Cpoly)%>%
   mutate(sc3_hhwacc_MUD = sc3_hhwacc_pct*tothh_MUD_Cpoly)%>%
-  #households with no access - from -150kW to 0
-  mutate(sc3_hhnoacc150_SU = sc3_hhnoacc150_pct*tothh_SU_Cpoly)%>%
-  mutate(sc3_hhnoacc150_duplex = sc3_hhnoacc150_pct*tothh_duplex_Cpoly)%>%
-  mutate(sc3_hhnoacc150_small = sc3_hhnoacc150_pct*tothh_small_Cpoly)%>%
-  mutate(sc3_hhnoacc150_large = sc3_hhnoacc150_pct*tothh_large_Cpoly)%>%
-  mutate(sc3_hhnoacc150_MUD = sc3_hhnoacc150_pct*tothh_MUD_Cpoly)%>%
-  #households with no access - more than -150kW
-  mutate(sc3_hhnoaccinf_SU = sc3_hhnoaccinf_pct*tothh_SU_Cpoly)%>%
-  mutate(sc3_hhnoaccinf_duplex = sc3_hhnoaccinf_pct*tothh_duplex_Cpoly)%>%
-  mutate(sc3_hhnoaccinf_small = sc3_hhnoaccinf_pct*tothh_small_Cpoly)%>%
-  mutate(sc3_hhnoaccinf_large = sc3_hhnoaccinf_pct*tothh_large_Cpoly)%>%
-  mutate(sc3_hhnoaccinf_MUD = sc3_hhnoaccinf_pct*tothh_MUD_Cpoly)
+  mutate(scenario = "sc3")
 
 cat(" Scenario 3 - All households should have access to level 2 (7.0 kW) charging facilities close to their homes. One charging infrastructure can support the load of 6.5 vehicles.
 
@@ -256,12 +228,9 @@ IOU_wacc_sc4 <- IOU_wacc %>%
   mutate(sc4_veh_headroom = ICL_max_hhWt_nadj - sc4_veh_load) %>%
   mutate(sc4_vehwacc = ifelse(sc4_veh_headroom>=0, totveh_Cpoly, totveh_Cpoly*ICL_max_hhWt_nadj/sc4_veh_load))%>%
   mutate(sc4_hhwacc = ifelse(sc4_veh_headroom>=0, tothh_Cpoly, tothh_Cpoly*ICL_max_hhWt_nadj/sc4_veh_load)) %>%
-  mutate(sc4_hhnoacc150 = ifelse(sc4_veh_headroom >=-150 & sc4_veh_headroom<0, tothh_Cpoly*(1-ICL_max_hhWt_nadj/sc4_veh_load), 0))%>%
-  mutate(sc4_hhnoaccinf = ifelse(sc4_veh_headroom < -150, tothh_Cpoly*(1-ICL_max_hhWt_nadj/sc4_veh_load), 0))%>%
+  mutate(ICL_hhnoacc = -ifelse(sc4_veh_headroom<0, sc4_veh_headroom/tothh_Cpoly, 0)) %>%
   mutate(sc4_vehwacc_pct = sc4_vehwacc/totveh_Cpoly)%>%
   mutate(sc4_hhwacc_pct = sc4_hhwacc/tothh_Cpoly)%>%
-  mutate(sc4_hhnoacc150_pct = sc4_hhnoacc150/tothh_Cpoly)%>%
-  mutate(sc4_hhnoaccinf_pct = sc4_hhnoaccinf/tothh_Cpoly)%>%
   #for all type of housing
   #vehicles with access
   mutate(sc4_vehwacc_SU = sc4_vehwacc_pct*totveh_SU_Cpoly)%>%
@@ -275,18 +244,7 @@ IOU_wacc_sc4 <- IOU_wacc %>%
   mutate(sc4_hhwacc_small = sc4_hhwacc_pct*tothh_small_Cpoly)%>%
   mutate(sc4_hhwacc_large = sc4_hhwacc_pct*tothh_large_Cpoly)%>%
   mutate(sc4_hhwacc_MUD = sc4_hhwacc_pct*tothh_MUD_Cpoly)%>%
-  #households with no access - from -150kW to 0
-  mutate(sc4_hhnoacc150_SU = sc4_hhnoacc150_pct*tothh_SU_Cpoly)%>%
-  mutate(sc4_hhnoacc150_duplex = sc4_hhnoacc150_pct*tothh_duplex_Cpoly)%>%
-  mutate(sc4_hhnoacc150_small = sc4_hhnoacc150_pct*tothh_small_Cpoly)%>%
-  mutate(sc4_hhnoacc150_large = sc4_hhnoacc150_pct*tothh_large_Cpoly)%>%
-  mutate(sc4_hhnoacc150_MUD = sc4_hhnoacc150_pct*tothh_MUD_Cpoly)%>%
-  #households with no access - more than -150kW
-  mutate(sc4_hhnoaccinf_SU = sc4_hhnoaccinf_pct*tothh_SU_Cpoly)%>%
-  mutate(sc4_hhnoaccinf_duplex = sc4_hhnoaccinf_pct*tothh_duplex_Cpoly)%>%
-  mutate(sc4_hhnoaccinf_small = sc4_hhnoaccinf_pct*tothh_small_Cpoly)%>%
-  mutate(sc4_hhnoaccinf_large = sc4_hhnoaccinf_pct*tothh_large_Cpoly)%>%
-  mutate(sc4_hhnoaccinf_MUD = sc4_hhnoaccinf_pct*tothh_MUD_Cpoly)
+  mutate(scenario = "sc4")
 
 cat(" Scenario 4 - All households should have access to home charging. Single unit houses have access to level 1 charging (1.5 kW) and MUDs to level 2. The number of charging stations depends on the housing types (see above).
     All: We estimate that ",sum(IOU_wacc_sc4$totveh_Cpoly[IOU_wacc_sc4$sc4_veh_headroom >= 0], na.rm = TRUE)," vehicles and ",sum(IOU_wacc_sc4$tothh_Cpoly[IOU_wacc_sc4$sc4_veh_headroom >= 0], na.rm = TRUE)," households have access to an adequate grid for charging.
@@ -319,19 +277,7 @@ df_sc1_cty_hh <- select(IOU_wacc_sc1, GEOID, county, IOU, tothh_Cpoly, intersect
             sc1_cty_wacc_duplex_pct = sum(sc1_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
             sc1_cty_wacc_small_pct = sum(sc1_hhwacc_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
             sc1_cty_wacc_large_pct = sum(sc1_hhwacc_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc1_cty_wacc_MUD_pct = sum(sc1_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc1_cty_noacc150_all_pct = sum(sc1_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc1_cty_noacc150_SU_pct = sum(sc1_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc1_cty_noacc150_duplex_pct = sum(sc1_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc1_cty_noacc150_small_pct = sum(sc1_hhnoacc150_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc1_cty_noacc150_large_pct = sum(sc1_hhnoacc150_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc1_cty_noacc150_MUD_pct = sum(sc1_hhnoacc150_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc1_cty_noaccinf_all_pct = sum(sc1_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc1_cty_noaccinf_SU_pct = sum(sc1_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc1_cty_noaccinf_duplex_pct = sum(sc1_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc1_cty_noaccinf_small_pct = sum(sc1_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc1_cty_noaccinf_large_pct = sum(sc1_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc1_cty_noaccinf_MUD_pct = sum(sc1_hhnoaccinf_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
+            sc1_cty_wacc_MUD_pct = sum(sc1_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
 
 #Scenario 2
 df_sc2_cty_hh <- select(IOU_wacc_sc2, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("sc2_hhwacc"), starts_with("sc2_hhnoacc")) %>%
@@ -345,19 +291,7 @@ df_sc2_cty_hh <- select(IOU_wacc_sc2, GEOID, county, IOU, tothh_Cpoly, intersect
             sc2_cty_wacc_duplex_pct = sum(sc2_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
             sc2_cty_wacc_small_pct = sum(sc2_hhwacc_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
             sc2_cty_wacc_large_pct = sum(sc2_hhwacc_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc2_cty_wacc_MUD_pct = sum(sc2_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc2_cty_noacc150_all_pct = sum(sc2_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc2_cty_noacc150_SU_pct = sum(sc2_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc2_cty_noacc150_duplex_pct = sum(sc2_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc2_cty_noacc150_small_pct = sum(sc2_hhnoacc150_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc2_cty_noacc150_large_pct = sum(sc2_hhnoacc150_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc2_cty_noacc150_MUD_pct = sum(sc2_hhnoacc150_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc2_cty_noaccinf_all_pct = sum(sc2_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc2_cty_noaccinf_SU_pct = sum(sc2_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc2_cty_noaccinf_duplex_pct = sum(sc2_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc2_cty_noaccinf_small_pct = sum(sc2_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc2_cty_noaccinf_large_pct = sum(sc2_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc2_cty_noaccinf_MUD_pct = sum(sc2_hhnoaccinf_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
+            sc2_cty_wacc_MUD_pct = sum(sc2_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
 
 #Scenario 3
 df_sc3_cty_hh <- select(IOU_wacc_sc3, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("sc3_hhwacc"), starts_with("sc3_hhnoacc")) %>%
@@ -371,19 +305,7 @@ df_sc3_cty_hh <- select(IOU_wacc_sc3, GEOID, county, IOU, tothh_Cpoly, intersect
             sc3_cty_wacc_duplex_pct = sum(sc3_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
             sc3_cty_wacc_small_pct = sum(sc3_hhwacc_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
             sc3_cty_wacc_large_pct = sum(sc3_hhwacc_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc3_cty_wacc_MUD_pct = sum(sc3_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc3_cty_noacc150_all_pct = sum(sc3_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc3_cty_noacc150_SU_pct = sum(sc3_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc3_cty_noacc150_duplex_pct = sum(sc3_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc3_cty_noacc150_small_pct = sum(sc3_hhnoacc150_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc3_cty_noacc150_large_pct = sum(sc3_hhnoacc150_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc3_cty_noacc150_MUD_pct = sum(sc3_hhnoacc150_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc3_cty_noaccinf_all_pct = sum(sc3_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc3_cty_noaccinf_SU_pct = sum(sc3_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc3_cty_noaccinf_duplex_pct = sum(sc3_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc3_cty_noaccinf_small_pct = sum(sc3_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc3_cty_noaccinf_large_pct = sum(sc3_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc3_cty_noaccinf_MUD_pct = sum(sc3_hhnoaccinf_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
+            sc3_cty_wacc_MUD_pct = sum(sc3_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
 
 #Scenario 4
 df_sc4_cty_hh <- select(IOU_wacc_sc4, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("sc4_hhwacc"), starts_with("sc4_hhnoacc")) %>%
@@ -397,19 +319,7 @@ df_sc4_cty_hh <- select(IOU_wacc_sc4, GEOID, county, IOU, tothh_Cpoly, intersect
             sc4_cty_wacc_duplex_pct = sum(sc4_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
             sc4_cty_wacc_small_pct = sum(sc4_hhwacc_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
             sc4_cty_wacc_large_pct = sum(sc4_hhwacc_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc4_cty_wacc_MUD_pct = sum(sc4_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc4_cty_noacc150_all_pct = sum(sc4_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc4_cty_noacc150_SU_pct = sum(sc4_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc4_cty_noacc150_duplex_pct = sum(sc4_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc4_cty_noacc150_small_pct = sum(sc4_hhnoacc150_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc4_cty_noacc150_large_pct = sum(sc4_hhnoacc150_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc4_cty_noacc150_MUD_pct = sum(sc4_hhnoacc150_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc4_cty_noaccinf_all_pct = sum(sc4_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc4_cty_noaccinf_SU_pct = sum(sc4_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc4_cty_noaccinf_duplex_pct = sum(sc4_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc4_cty_noaccinf_small_pct = sum(sc4_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc4_cty_noaccinf_large_pct = sum(sc4_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc4_cty_noaccinf_MUD_pct = sum(sc4_hhnoaccinf_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
+            sc4_cty_wacc_MUD_pct = sum(sc4_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
 
 
 transform_df <- function(df) {
@@ -450,7 +360,6 @@ df_county$Load <- recode(factor(df_county$Load, levels = c(
 ```{r}
 df_county <- df_county %>%
     filter(!(county == "Alpine"),
-           !(county == "Fresno" & IOU == "SCE"),
            !(county == "Inyo" & IOU == "PGE"),
            !(county == "Mariposa" & IOU == "SCE"),
            !(county == "Mono" & IOU == "PGE"),
@@ -458,62 +367,62 @@ df_county <- df_county %>%
            !(county == "Ventura" & IOU == "PGE"),
            !(county == "Imperial"),
            !(county == "Lassen"),
-           !(county == "Madera"),
+           !(county == "Madera" & IOU == "SCE"),
            !(county == "San Diego"),
            !(county == "Siskiyou"),
            !(county == "Trinity"))
 ```
 
 ```{r}
-#Save data in csv files for all counties and PGE
+#Save data in csv files for PGE and all counties
 
-# #Scenario 1 - With Access & All Housing
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Indiv. access (1.5kW)")
-# write.csv(PGE_access_all, "figures/access_files/with_access/PGE_all/PGE_access_sc1_all.csv", row.names = FALSE)
-# 
-# #Scenario 2 - With Access & All Housing
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Indiv. access (7.0kW)")
-# write.csv(PGE_access_all, "figures/access_files/with_access/PGE_all/PGE_access_sc2_all.csv", row.names = FALSE)
-# 
-# #Scenario 3 - With Access & All Housing
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Shared access")
-# write.csv(PGE_access_all, "figures/access_files/with_access/PGE_all/PGE_access_sc3_all.csv", row.names = FALSE)
-# 
-# #Scenario 4 - With Access & All Housing
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Mixed")
-# write.csv(PGE_access_all, "figures/access_files/with_access/PGE_all/PGE_access_sc4_all.csv", row.names = FALSE)
+#Scenario 1 - With Access & All Housing
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Indiv. access (1.5kW)")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_all/PGE_access_sc1_all.csv", row.names = FALSE)
 
-# #Scenario 1 - With Access & Single Unit
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Indiv. access (1.5kW)")
-# write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc1_SU.csv", row.names = FALSE)
-# 
-# #Scenario 2 - With Access & Single Unit
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Indiv. access (7.0kW)")
-# write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc2_SU.csv", row.names = FALSE)
-# 
-# #Scenario 3 - With Access & Single Unit
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Shared access")
-# write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc3_SU.csv", row.names = FALSE)
-# 
-# #Scenario 4 - With Access & Single Unit
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Mixed")
-# write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc4_SU.csv", row.names = FALSE)
+#Scenario 2 - With Access & All Housing
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Indiv. access (7.0kW)")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_all/PGE_access_sc2_all.csv", row.names = FALSE)
 
-# #Scenario 1 - With Access & Multiple Unit
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All MUD (including duplex)" & Scenario == "Indiv. access (1.5kW)")
-# write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_MUD/PGE_access_sc1_MUD.csv", row.names = FALSE)
-# 
-# #Scenario 2 - With Access & Multiple Unit
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All MUD (including duplex)" & Scenario == "Indiv. access (7.0kW)")
-# write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_MUD/PGE_access_sc2_MUD.csv", row.names = FALSE)
-# 
-# #Scenario 3 - With Access & Multiple Unit
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All MUD (including duplex)" & Scenario == "Shared access")
-# write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_MUD/PGE_access_sc3_MUD.csv", row.names = FALSE)
-# 
-# #Scenario 4 - With Access & Multiple Unit
-# PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All MUD (including duplex)" & Scenario == "Mixed")
-# write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_MUD/PGE_access_sc4_MUD.csv", row.names = FALSE)
+#Scenario 3 - With Access & All Housing
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Shared access")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_all/PGE_access_sc3_all.csv", row.names = FALSE)
+
+#Scenario 4 - With Access & All Housing
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All" & Scenario == "Mixed")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_all/PGE_access_sc4_all.csv", row.names = FALSE)
+
+#Scenario 1 - With Access & Single Unit
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Indiv. access (1.5kW)")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc1_SU.csv", row.names = FALSE)
+
+#Scenario 2 - With Access & Single Unit
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Indiv. access (7.0kW)")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc2_SU.csv", row.names = FALSE)
+
+#Scenario 3 - With Access & Single Unit
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Shared access")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc3_SU.csv", row.names = FALSE)
+
+#Scenario 4 - With Access & Single Unit
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "Single Unit" & Scenario == "Mixed")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_SU/PGE_access_sc4_SU.csv", row.names = FALSE)
+
+#Scenario 1 - With Access & Multiple Unit
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All MUD (including duplex)" & Scenario == "Indiv. access (1.5kW)")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_MUD/PGE_access_sc1_MUD.csv", row.names = FALSE)
+
+#Scenario 2 - With Access & Multiple Unit
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All MUD (including duplex)" & Scenario == "Indiv. access (7.0kW)")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_MUD/PGE_access_sc2_MUD.csv", row.names = FALSE)
+
+#Scenario 3 - With Access & Multiple Unit
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All MUD (including duplex)" & Scenario == "Shared access")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_MUD/PGE_access_sc3_MUD.csv", row.names = FALSE)
+
+#Scenario 4 - With Access & Multiple Unit
+PGE_access_all = subset(df_county, IOU == "PGE" & Load == "Have access" & Housing == "All MUD (including duplex)" & Scenario == "Mixed")
+write.csv(PGE_access_all, "figures/scenarios/with_access/PGE_MUD/PGE_access_sc4_MUD.csv", row.names = FALSE)
 ```
 
 
@@ -537,19 +446,7 @@ df_sc1_hh <- select(IOU_wacc_sc1, GEOID, county, IOU, tothh_Cpoly, intersect(sta
             sc1_wacc_duplex_pct = sum(sc1_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
             sc1_wacc_small_pct = sum(sc1_hhwacc_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
             sc1_wacc_large_pct = sum(sc1_hhwacc_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc1_wacc_MUD_pct = sum(sc1_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc1_noacc150_all_pct = sum(sc1_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc1_noacc150_SU_pct = sum(sc1_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc1_noacc150_duplex_pct = sum(sc1_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc1_noacc150_small_pct = sum(sc1_hhnoacc150_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc1_noacc150_large_pct = sum(sc1_hhnoacc150_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc1_noacc150_MUD_pct = sum(sc1_hhnoacc150_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc1_noaccinf_all_pct = sum(sc1_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc1_noaccinf_SU_pct = sum(sc1_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc1_noaccinf_duplex_pct = sum(sc1_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc1_noaccinf_small_pct = sum(sc1_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc1_noaccinf_large_pct = sum(sc1_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc1_noaccinf_MUD_pct = sum(sc1_hhnoaccinf_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
+            sc1_wacc_MUD_pct = sum(sc1_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
 
 #Scenario 2
 df_sc2_hh <- select(IOU_wacc_sc2, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("sc2_hhwacc"), starts_with("sc2_hhnoacc")) %>%
@@ -563,19 +460,7 @@ df_sc2_hh <- select(IOU_wacc_sc2, GEOID, county, IOU, tothh_Cpoly, intersect(sta
             sc2_wacc_duplex_pct = sum(sc2_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
             sc2_wacc_small_pct = sum(sc2_hhwacc_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
             sc2_wacc_large_pct = sum(sc2_hhwacc_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc2_wacc_MUD_pct = sum(sc2_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc2_noacc150_all_pct = sum(sc2_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc2_noacc150_SU_pct = sum(sc2_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc2_noacc150_duplex_pct = sum(sc2_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc2_noacc150_small_pct = sum(sc2_hhnoacc150_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc2_noacc150_large_pct = sum(sc2_hhnoacc150_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc2_noacc150_MUD_pct = sum(sc2_hhnoacc150_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc2_noaccinf_all_pct = sum(sc2_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc2_noaccinf_SU_pct = sum(sc2_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc2_noaccinf_duplex_pct = sum(sc2_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc2_noaccinf_small_pct = sum(sc2_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc2_noaccinf_large_pct = sum(sc2_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc2_noaccinf_MUD_pct = sum(sc2_hhnoaccinf_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
+            sc2_wacc_MUD_pct = sum(sc2_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
 
 #Scenario 3
 df_sc3_hh <- select(IOU_wacc_sc3, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("sc3_hhwacc"), starts_with("sc3_hhnoacc")) %>%
@@ -589,19 +474,7 @@ df_sc3_hh <- select(IOU_wacc_sc3, GEOID, county, IOU, tothh_Cpoly, intersect(sta
             sc3_wacc_duplex_pct = sum(sc3_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
             sc3_wacc_small_pct = sum(sc3_hhwacc_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
             sc3_wacc_large_pct = sum(sc3_hhwacc_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc3_wacc_MUD_pct = sum(sc3_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc3_noacc150_all_pct = sum(sc3_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc3_noacc150_SU_pct = sum(sc3_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc3_noacc150_duplex_pct = sum(sc3_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc3_noacc150_small_pct = sum(sc3_hhnoacc150_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc3_noacc150_large_pct = sum(sc3_hhnoacc150_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc3_noacc150_MUD_pct = sum(sc3_hhnoacc150_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc3_noaccinf_all_pct = sum(sc3_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc3_noaccinf_SU_pct = sum(sc3_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc3_noaccinf_duplex_pct = sum(sc3_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc3_noaccinf_small_pct = sum(sc3_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc3_noaccinf_large_pct = sum(sc3_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc3_noaccinf_MUD_pct = sum(sc3_hhnoaccinf_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
+            sc3_wacc_MUD_pct = sum(sc3_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
 
 #Scenario 4
 df_sc4_hh <- select(IOU_wacc_sc4, GEOID, county, IOU, tothh_Cpoly, intersect(starts_with("tothh_"), ends_with("_Cpoly")), starts_with("sc4_hhwacc"), starts_with("sc4_hhnoacc")) %>%
@@ -615,19 +488,7 @@ df_sc4_hh <- select(IOU_wacc_sc4, GEOID, county, IOU, tothh_Cpoly, intersect(sta
             sc4_wacc_duplex_pct = sum(sc4_hhwacc_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
             sc4_wacc_small_pct = sum(sc4_hhwacc_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
             sc4_wacc_large_pct = sum(sc4_hhwacc_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc4_wacc_MUD_pct = sum(sc4_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc4_noacc150_all_pct = sum(sc4_hhnoacc150, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc4_noacc150_SU_pct = sum(sc4_hhnoacc150_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc4_noacc150_duplex_pct = sum(sc4_hhnoacc150_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc4_noacc150_small_pct = sum(sc4_hhnoacc150_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc4_noacc150_large_pct = sum(sc4_hhnoacc150_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc4_noacc150_MUD_pct = sum(sc4_hhnoacc150_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE),
-            sc4_noaccinf_all_pct = sum(sc4_hhnoaccinf, na.rm=TRUE)/sum(tothh_Cpoly, na.rm=TRUE),
-            sc4_noaccinf_SU_pct = sum(sc4_hhnoaccinf_SU, na.rm=TRUE)/sum(tothh_SU_Cpoly, na.rm=TRUE),
-            sc4_noaccinf_duplex_pct = sum(sc4_hhnoaccinf_duplex, na.rm=TRUE)/sum(tothh_duplex_Cpoly, na.rm=TRUE),
-            sc4_noaccinf_small_pct = sum(sc4_hhnoaccinf_small, na.rm=TRUE)/sum(tothh_small_Cpoly, na.rm=TRUE),
-            sc4_noaccinf_large_pct = sum(sc4_hhnoaccinf_large, na.rm=TRUE)/sum(tothh_large_Cpoly, na.rm=TRUE),
-            sc4_noaccinf_MUD_pct = sum(sc4_hhnoaccinf_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
+            sc4_wacc_MUD_pct = sum(sc4_hhwacc_MUD, na.rm=TRUE)/sum(tothh_MUD_Cpoly, na.rm=TRUE))
 
 transform_df <- function(df) {
   df %>%
@@ -667,82 +528,62 @@ df_plot$Load <- recode(factor(df_plot$Load, levels = c(
 #Plot - Only hhwacc and PGE
 df_plot_access = subset(df_plot, Load == "Have access" & (Housing == "All" | Housing == "Single-Unit" | Housing == "Multi-Unit") & IOU == "PGE")
 
-plot_access <- ggplot(df_plot_access, aes(x = Housing, y = pct, color = Scenario)) +
+plot_access <- ggplot(df_plot_access, aes(x = Housing, y = pct, fill = Scenario)) + 
   facet_grid(~ IOU, scales = "free_x", space = "free_x") +
-  geom_point(size = 2) +
-  scale_color_manual(values = c("#7EE081", "#62A87C", "#00487C", "#F6F5AE")) +  # Adjust colors as needed
+  geom_col(position = position_dodge(width = 0.9)) +  # Adjust 'width' as needed to control the spacing
+  scale_fill_manual(values = c("#7EE081", "#62A87C", "#00487C", "#F6F5AE")) +
   labs(title = "",
        x = "",
        y = "Proportion of households with access [%]",
-       # shape = "Access / No Access",
-       color = "Scenario") +
+       fill = "Scenario") +
   theme_light() +
-  theme(plot.title = element_text(face = "bold", size = (15)),
-    axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(plot.title = element_text(face = "bold", size = 15),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1), labels = scales::percent_format(accuracy = 1))
 
-ggsave("figures/scenarios/PGE_access_scenarios_access.png", plot_access, width = 6, height = 4)
+ggsave("figures/scenarios/PGE_access_scenarios_access.png", plot_access, width = 8, height = 5.5)
 print(plot_access)
 ```
+
+
 ```{r}
-sc1_load = sum(IOU_wacc_sc1$sc1_veh_load, na.rm = TRUE)
-sc2_load = sum(IOU_wacc_sc2$sc2_veh_load, na.rm = TRUE)
-sc3_load = sum(IOU_wacc_sc3$sc3_veh_load, na.rm = TRUE)
-sc4_load = sum(IOU_wacc_sc4$sc4_veh_load, na.rm = TRUE)
+#Some analysis on PG&E's  access results - Chapter 5
 
-tot_veh = sum(IOU_wacc$totveh_Cpoly, na.rm = TRUE)
-tot_hh = sum(IOU_wacc$tothh_Cpoly, na.rm = TRUE)
+cat("PG&E: We estimate that there is ", sum(IOU_wacc$totveh_Cpoly, na.rm = TRUE), "vehicles and ", sum(IOU_wacc$tothh_Cpoly, na.rm = TRUE), "households on PG&E service territory.
+The total capacities needed to accomodate the EV charging facilities according to each charging scenarios are: ", round(sum(IOU_wacc_sc1$sc1_veh_load, na.rm = TRUE)/1000000,1) ,"GW for Scenario 1,", round(sum(IOU_wacc_sc2$sc2_veh_load, na.rm = TRUE)/1000000,1), "GW for Scenario 2,", round(sum(IOU_wacc_sc3$sc3_veh_load, na.rm = TRUE)/1000000,1), "GW for Scenario 3, and", round(sum(IOU_wacc_sc4$sc4_veh_load, na.rm = TRUE)/1000000,1),"GW for Scenario 4.
 
-sc1_load_veh = sc1_load/tot_veh
-sc1_load_hh = sc1_load/tot_hh
-
-sc2_load_veh = sc2_load/tot_veh
-sc2_load_hh = sc2_load/tot_hh
-
-sc3_load_veh = sc3_load/tot_veh
-sc3_load_hh = sc3_load/tot_hh
-
-sc4_load_veh = sc4_load/tot_veh
-sc4_load_hh = sc4_load/tot_hh
+To accommodate the full spectrum of PG&E households with EV charging capabilities, the electrical infrastructure would need substantial capacity enhancements. Specifically, the required increases are estimated at", round(-sum(IOU_wacc_sc1$sc1_veh_headroom[IOU_wacc_sc1$sc1_veh_headroom < 0], na.rm = TRUE)/1000000,1) ,"GW for Scenario 1,", round(-sum(IOU_wacc_sc2$sc2_veh_headroom[IOU_wacc_sc2$sc2_veh_headroom < 0], na.rm = TRUE)/1000000,1), "GW for Scenario 2,", round(-sum(IOU_wacc_sc3$sc3_veh_headroom[IOU_wacc_sc3$sc3_veh_headroom < 0], na.rm = TRUE)/1000000,1), "GW for Scenario 3, and", round(-sum(IOU_wacc_sc4$sc4_veh_headroom[IOU_wacc_sc4$sc4_veh_headroom < 0], na.rm = TRUE)/1000000,1),"GW for Scenario 4.")
 ```
 
+-----------------------------------------------
+-----------------------------------------------
+NO ACCESS AT IOU LEVEL
+-----------------------------------------------
+-----------------------------------------------
 
 ```{r}
-#Plot - Both access and no access
-df_plot_access = subset(df_plot, Load == "Have access")
+cs_noaccess <- rbind(select(IOU_wacc_sc1, IOU, tothh_Cpoly, scenario, ICL_hhnoacc),
+                     select(IOU_wacc_sc2, IOU, tothh_Cpoly, scenario, ICL_hhnoacc),
+                     select(IOU_wacc_sc3, IOU, tothh_Cpoly, scenario, ICL_hhnoacc),
+                     select(IOU_wacc_sc4, IOU, tothh_Cpoly, scenario, ICL_hhnoacc)) %>%
+  melt(id=c("IOU", "tothh_Cpoly", "scenario")) %>%
+  mutate(scenario = recode(factor(scenario, levels=c("sc1","sc2", "sc3", "sc4")), 
+                                  'sc1'="1 - Indiv. access (1.5kW)", 'sc2'="2 - Indiv. access (7kW)", 'sc3'="3 - Shared access", 'sc4'="4 - Mixed"))
 
-plot_access <- ggplot(df_plot_access, aes(x = Housing, y = pct, color = Scenario)) +
-  facet_grid(~ IOU, scales = "free_x", space = "free_x") +
-  geom_point(size = 2) +
-  scale_color_manual(values = c("#7EE081", "#62A87C", "#00487C", "#F6F5AE")) +  # Adjust colors as needed
-  labs(title = "a",
-       x = "",
-       y = "Proportion of households with access [%]",
-       # shape = "Access / No Access",
-       color = "Scenario") +
-  theme_light() +
-  theme(plot.title = element_text(face = "bold", size = (15)),
-    axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") +
-  scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1), labels = scales::percent_format(accuracy = 1))
+cs <- cs_noaccess %>% 
+  filter(!is.na(value), !(value==0), !(IOU=="SCE")) %>% 
+  ggplot(aes(y=value, fill = scenario)) + plotops_csgrid
+cs
 
-#Plot No access
-df_plot_no_access = subset(df_plot, Load != "Have access")
+ggsave("figures/scenarios/without_access/PGE_deficit_cs_scenarios.png", width=8, height= 4.5)
+```
 
-plot_no_access <- ggplot(df_plot_no_access, aes(x = Housing, y = pct, shape = Load, color = Scenario)) +
-  facet_grid(~ IOU, scales = "free_x", space = "free_x") +
-  geom_point(size = 2) +
-  scale_shape_manual(values = c(15, 17)) +
-  scale_color_manual(values = c("#7EE081", "#62A87C", "#00487C", "#F6F5AE"), guide = FALSE) +  # Adjust colors as needed
-  labs(title = "b",
-       x = "Housing Type",
-       y = "Proportion of households without access [%]",
-       shape = "Lack of power",
-       color = "Scenario") +
-  theme_light() +
-  theme(plot.title = element_text(face = "bold", size = (15)),
-    axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") +
-  scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1), labels = scales::percent_format(accuracy = 1))
-
-combined_plot <- grid.arrange(plot_access, plot_no_access, ncol = 1)
-# ggsave("figures/scenarios/IOU_access_scenarios.png", combined_plot, width = 6, height = 7.5)
+```{r}
+PGE_results_noaccess <- cs_noaccess %>%
+  filter(!is.na(value), value != 0, IOU != "SCE") %>%
+  group_by(scenario) %>%
+  summarise(
+    tothh = sum(tothh_Cpoly),
+    CS_count = n()
+  )
 ```
