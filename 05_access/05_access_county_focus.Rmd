@@ -7,16 +7,11 @@ This notebook calculates and analyses grid access for households in specific cou
 
 ```{r}
 library(tidyverse)
-library(tictoc)
 library(reshape2)
 library(ggplot2)
 library(stringr)
-library(tidytext)
-library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
-library(readxl)
 library(colorspace)
 library(cowplot)
-library(fANCOVA)
 library(gridExtra)
 
 get_legend<-function(myggplot){

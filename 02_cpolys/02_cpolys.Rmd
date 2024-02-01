@@ -7,15 +7,10 @@ This code pulls in circuit polygon data from PG&E and SCE and analyzes clipping 
 
 ```{r}
 library(tidyverse)
-library(tictoc)
-library(reshape2)
 library(ggplot2)
 library(stringr)
-library(tidytext)
-library(measurements) # https://cran.r-project.org/web/packages/measurements/measurements.pdf
 library(readxl)
 library(colorspace)
-library(cowplot)
 ```
 
 --------------------------------------------------------------------------------------------
