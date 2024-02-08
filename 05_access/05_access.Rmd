@@ -1,9 +1,13 @@
 ---
 title: "05_access"
 output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
-This code calculates overall grid access for households in PG&E and SCE service territories, considering residential building sizes.
+This code calculates overall grid access for households in PG&E and SCE
+service territories, considering residential building sizes.
 
 ```{r}
 library(tidyverse)
@@ -49,11 +53,11 @@ labsDER <- function(x) ifelse(x == "ICL", "Load", NA)
 housing <- c("SU", "duplex", "3to4", "5to9", "10to19", "20to49", "50plus")
 ```
 
---------------------------------------------------------------------------------------------
+------------------------------------------------------------------------
 
 GRID LIMITS
 
---------------------------------------------------------------------------------------------
+------------------------------------------------------------------------
 
 ```{r}
 plotops_bggrid = list(
@@ -83,8 +87,8 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   labs(x="Access threshold (kW)", y="Portion of households with access", color="Residential building size"))
 ```
 
-ACCESS
-We calculate the number of households with access based on grid limits.
+ACCESS We calculate the number of households with access based on grid
+limits.
 
 ```{r}
 SCE_ICAaccess[["hhwacc_0_ICL_pct"]] <- ifelse(SCE_ICAaccess[["ICL_kWphh"]]>0, 1, 0)
@@ -101,7 +105,7 @@ for (t in 1:length(at)) {
 }
 ```
 
-```{r} 
+```{r}
 ###Computing number of households with access per block groups
 IOU_ICAaccess_grid <- 
   rbind(select(PGE_ICAaccess, IOU, tothh_Cpoly, tothh_SU_Cpoly, tothh_duplex_Cpoly, tothh_3to4_Cpoly, tothh_5to9_Cpoly, tothh_10to19_Cpoly, tothh_20to49_Cpoly, tothh_50plus_Cpoly, GEOID, intersect(starts_with("hhwacc_"), ends_with("_pct"))),
@@ -165,7 +169,7 @@ IOU_hhwacc_grid <- IOU_ICAaccess_grid %>%
   mutate(threshold = as.numeric(ifelse(as.character(threshold)==">0","0",as.character(threshold))))
 ```
 
-Visualizing results...
+Plotting Fig. 4.2
 
 ```{r}
 lf <- melt(IOU_hhwacc_grid, id=c("IOU", "DER", "threshold", "tothh", "avgacc_pct"))
@@ -181,6 +185,7 @@ print(a)
 ggsave("figures/access/IOU_access_housing_size.png", a, width=8, height=4.5)
 ```
 
+Plotting Fig. 3.2
 
 ```{r}
 # For the box grid plot
@@ -204,6 +209,8 @@ ggsave("figures/access/IOU_access_comb_ICL.png", width=12, height=6)
 ```
 
 Printing statistics values of households access to use in tables
+
+Table 3.2
 
 ```{r}
 accgr1 <- as.data.frame(IOU_hhwacc_grid) %>%
@@ -270,6 +277,8 @@ accgr
 rm(accgr1,accgr2)
 ```
 
+Table A.6
+
 ```{r}
 acchouse <- as.data.frame(IOU_hhwacc_grid) %>%
   select(-c("DER", "tothh", "avgacc_pct")) %>%
@@ -300,13 +309,14 @@ acctothh <- IOU_ICAaccess_grid %>%
 acctothh
 ```
 
+#Comparison of households access between 2019 and 2023 ICA data The
+proportions of household access for capacity thresholds above 0kW,
+1.5kW, and 10kW have been manually recorded in a CSV file named
+'compar_access_2019_2023.csv'. The results corresponding to the year
+2019 have been sourced from the paper published by Brockway et al.
 
+Plotting Fig. 3.3
 
-#Comparison of households access between 2019 and 2023 ICA data
-The proportions of household access for capacity thresholds above 0kW, 1.5kW,
-and 10kW have been manually recorded in a CSV file named 'compar_access_2019_2023.csv'.
-The results corresponding to the year 2019 have been sourced from the paper published
-by Brockway et al.
 ```{r}
 compar_acc = read.csv("comp_access_2019_2023.csv", header=T, na.strings="?")
 

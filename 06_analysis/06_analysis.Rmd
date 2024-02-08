@@ -318,8 +318,6 @@ df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[10,"f_cat"],featsc
                      feature=featscales[10,"feature"])
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()),
-  # guides(color=none(), fill=none()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
@@ -346,12 +344,10 @@ df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[2,"f_cat"],featsca
                      feature=featscales[2,"feature"])
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()),
-  # guides(color=none(), fill=none()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
-  geom_line(aes(y=lfit, color=feature)), #scale_x_continuous(breaks=seq(0,6,by=2)),
+  geom_line(aes(y=lfit, color=feature)),
   scale_fill_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
   scale_color_manual(values=c(qualitative_hcl(2,palette="Dark3")[2])),
   labs(x="Length of full circuit (km))", y=plotlabs[1], alpha=expression("Households (x10"^"3)")),
@@ -373,8 +369,6 @@ df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[27,"f_cat"],featsc
                      feature=featscales[27,"feature"])
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme(legend.position="none", axis.title=element_blank()),
-  # guides(color=none(), fill=none()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature), shape=21, size=1, color="black"),
@@ -416,7 +410,7 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_line(aes(y=lfit, color=feature)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
+  scale_x_continuous(breaks=seq(0,100,by=20)),
   scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
   labs(x="Population identifying as racial/ethnic group (%)", y=plotlabs[1], fill="Racial/ethnic groups", color="Racial/ethnic groups"),
   guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE)),
@@ -449,7 +443,7 @@ plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)),
   scale_shape_manual(values=c(21,22)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
+  scale_x_continuous(breaks=seq(0,100,by=20)),
   scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
   labs(x="Households earning in income tier (%)", y=plotlabs[1], fill="Income tier", color="Income tier", shape="Income tier", alpha=expression("Households (x10"^"3)")),
   guides(fill = guide_legend(nrow = 1, byrow = TRUE), color = guide_legend(nrow = 1, byrow = TRUE), shape = guide_legend(nrow = 1, byrow = TRUE), alpha = guide_legend(nrow = 1, byrow = TRUE)),
@@ -545,7 +539,8 @@ print(f2)
 ggsave("demo_ces_all_population.png", f2, path="figures/lowesscomb/", width=8, height=5.5)
 ```
 
-Combine figures - Figure n°XX
+Plotting Figure 3.5
+
 ```{r}
 plot_grid(a, b, c, d, e1, e2, f1, f2, nrow=4, ncol=2, scale=0.95, labels=c('a','b','c','d','e','f', 'g', 'h'), label_size=15)
 
@@ -653,10 +648,8 @@ feature_colors <- c("Single Unit" = "#E6849B",
                     "All MUD (including duplex)" = "#415D43")
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme( axis.title=element_blank()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
-  # geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)),
   scale_x_continuous(breaks=seq(0,100,by=20)),
   scale_color_manual(values=feature_colors),
@@ -674,7 +667,7 @@ ggsave("demo_housing_types_v2.png", i, path="figures/lowesscomb/", width=8, heig
 print(i)
 ```
 
-Combine figures - Figure n°XX
+Plotting Figure 4.1
 
 ```{r}
 plot_grid(g, h, i, j, nrow=2, ncol=2, scale=0.95, labels=c('a','b','c','d'), label_size=15)
@@ -701,12 +694,11 @@ df_p <- df_p %>%
                           'largemulti_pct'="Large MUD", 'MUD_pct'="MUD (including duplex)"))
 
 plotops <- list(theme_light(), facet_grid(IOU~., scales="fixed"),
-  # theme( axis.title=element_blank()),
   geom_ribbon(aes(ymin=ci90l, ymax=ci90h, fill=feature), alpha=0.3),
   geom_ribbon(aes(ymin=ci50l, ymax=ci50h, fill=feature), alpha=0.3),
   geom_point(aes(y=wtdmed, alpha=tothh_Cpoly/1000, fill=feature, shape=feature), size=1, color="black"),
   geom_line(aes(y=lfit, color=feature)),
-  scale_x_continuous(breaks=seq(0,100,by=20)), #scale_y_continuous(breaks=scales::pretty_breaks(3)),
+  scale_x_continuous(breaks=seq(0,100,by=20)),
   scale_color_discrete_qualitative(palette="Dark3"), scale_fill_discrete_qualitative(palette="Dark3"),
   labs(x="Type of housing (%)", y=plotlabs[1], fill="Type of housing", color="Type of housing", shape="Type of housing", alpha=expression("Households (x10"^"3)")))
 
@@ -717,7 +709,9 @@ ggsave("demo_housing_types_v1.png", k, path="figures/lowesscomb/", width=8, heig
 
 print(k)
 ```
-Plot K - Demoraphic - Population change between 2012-2016 and 2017-2021 
+
+Plot K - Demoraphic - Population change between 2012-2016 and 2017-2021
+Plotting Figure A.10
 
 ```{r}
 df_p <- mutate(read.csv(paste0("figures/lowessci/",featscales[36,"f_cat"],featscales[36,"feature"],"_lfit.csv"), 

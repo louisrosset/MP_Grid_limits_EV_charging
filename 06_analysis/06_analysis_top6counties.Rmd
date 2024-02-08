@@ -585,6 +585,7 @@ print(e)
 ```
 
 Lowess plots - housing types (plot n°2)
+Plotting Figure A.6
 
 ```{r}
 df_p <- read.csv(paste0("figures/county/lowessci/",featscales[19,"f_cat"],featscales[19,"feature"],"_lfit.csv"),

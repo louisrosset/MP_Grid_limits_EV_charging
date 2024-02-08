@@ -518,6 +518,8 @@ df_plot$Load <- recode(factor(df_plot$Load, levels = c(
 )
 ```
 
+Plotting Figure 5.1
+
 ```{r}
 #Plot - Only hhwacc and PGE
 df_plot_access = subset(df_plot, Load == "Have access" & (Housing == "All" | Housing == "Single-Unit" | Housing == "Multi-Unit") & IOU == "PGE")
@@ -554,6 +556,8 @@ To accommodate the full spectrum of PG&E households with EV charging capabilitie
 NO ACCESS AT IOU LEVEL
 -----------------------------------------------
 -----------------------------------------------
+
+Plotting Figure A.8
 
 ```{r}
 cs_noaccess <- rbind(select(IOU_wacc_sc1, IOU, tothh_Cpoly, scenario, ICL_hhnoacc),

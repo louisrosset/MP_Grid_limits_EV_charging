@@ -143,7 +143,7 @@ print(b)
 
 ```{r}
 #Plot Figure 3.4. 
-combined_plot <- plot_grid(a, NULL, b, ncol = 3, rel_widths = c(1, 0.1, 1), scale=0.95, labels=c('a','','b'), label_size=12)
+combined_plot <- plot_grid(a, NULL, b, ncol = 3, rel_widths = c(1, 0.1, 1), scale=0.95, labels=c('a','','b'), label_size=15)
 
 ggsave("Reg_perf_imp_metrics.png", combined_plot, path="figures_eval/", width=12, height=7.5)
 
