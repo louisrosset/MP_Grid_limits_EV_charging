@@ -2,7 +2,7 @@
 ## Impact of Grid Infrastructure Limits on Electric Vehicle Charging Access for California Households
 *Berkeley, February 2024*
 
-This repository contains all the codes, figures, and some raw data tables used in the study ['Impact of Grid Infrastructure Limits on Electric Vehicle Charging Access for California Households'](https://github.com/louisrosset/MP_Grid_limits_EV_charging/files/14219891/240209_Grid_limits_EV_charging.pdf). ICA data tables could not be uploaded due to their large volume. The files are organized into folders numbered 1 through 7, each corresponding to a different stage of the analysis.
+This repository contains all the codes, figures, and some raw data tables used in the study ['Impact of Grid Infrastructure Limits on Electric Vehicle Charging Access for California Households'](https://github.com/louisrosset/MP_Grid_limits_EV_charging/files/14219976/240209_Grid_limits_EV_charging.pdf). ICA data tables could not be uploaded due to their large volume. The files are organized into folders numbered 1 through 7, each corresponding to a different stage of the analysis.
 
 A diagram illustrating the architecture of the repository is displayed at the end of the README file.
 
